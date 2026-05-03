@@ -1614,23 +1614,6 @@ public class HomePage : Form, TuioListener
         }
     }
 
-    // ── Level mapping helpers ────────────────────────────────────
-
-    private string MapDisplayedLevel(string level)
-    {
-        if (string.IsNullOrEmpty(level)) return "Beginner";
-        if (level.IndexOf("Primary", StringComparison.OrdinalIgnoreCase) >= 0) return "Beginner";
-        if (level.IndexOf("Secondary", StringComparison.OrdinalIgnoreCase) >= 0) return "Intermediate";
-        if (level.IndexOf("High", StringComparison.OrdinalIgnoreCase) >= 0) return "Advanced";
-        return level;
-    }
-
-    private string MapDetectedPlayerLevel(string level)
-    {
-        string display = MapDisplayedLevel(level);
-        return $"{display} Padel level detected! Get ready to train 🎾";
-    }
-
     // ══════════════════════════════════════════════════════════════
     //  Face Recognition Integration
     // ══════════════════════════════════════════════════════════════
