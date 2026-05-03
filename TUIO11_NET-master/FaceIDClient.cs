@@ -118,7 +118,8 @@ public class FaceIDClient : IDisposable
                 string userName = json["user_name"]?.ToString();
                 float confidence = json["confidence"]?.Value<float>() ?? 0f;
 
-                if (!string.IsNullOrEmpty(userName) && confidence >= 0.85f)
+                // Trust the Python server's match decision (it already filters by distance threshold)
+                if (!string.IsNullOrEmpty(userName))
                 {
                     Console.WriteLine($"[FaceIDClient] Face recognized: {userName} (confidence: {confidence:F2})");
                     FaceIDRouter.RouteRecognition(userName, confidence);
