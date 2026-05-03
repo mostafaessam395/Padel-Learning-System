@@ -1,80 +1,132 @@
 """
 Face Recognition Server for Smart Padel Coaching System
 ========================================================
-Captures webcam frames, compares faces against enrolled embeddings,
-and sends recognized identities to the C# client over TCP (port 5001).
+Uses pure OpenCV (no TensorFlow, no dlib, no heavy AI).
+
+Strategy: OpenCV DNN face detector + LBPH face recognizer.
+Works on ALL Python versions including 3.14.
+
+Enrollment: Save a photo in Data/face_images/<PlayerName>/ref.jpg
+The server compares webcam faces against these reference photos.
 
 Usage:
-    pip install -r requirements.txt
+    pip install opencv-python opencv-contrib-python numpy
     python face_recognition_server.py
 
 Protocol (TCP, newline-delimited JSON):
-    {"type": "face_detected", "user_name": "MOSTAFA_ESSAM", "confidence": 0.92}
+    {"type": "face_detected", "user_name": "Shahd", "confidence": 0.92}
 """
 
 import os
 import sys
 import json
-import pickle
 import socket
 import threading
 import time
-import numpy as np
 
 try:
     import cv2
-    import face_recognition
-except ImportError:
-    print("ERROR: Missing dependencies. Run:  pip install -r requirements.txt")
+    import numpy as np
+except ImportError as e:
+    print(f"ERROR: Missing dependency: {e}")
+    print("Run:  pip install opencv-python opencv-contrib-python numpy")
     sys.exit(1)
 
 # ── Configuration ────────────────────────────────────────────────
 HOST = "127.0.0.1"
 PORT = 5001
-EMBEDDINGS_DIR = os.path.join(os.path.dirname(__file__), "..", "Data", "face_embeddings")
-CONFIDENCE_THRESHOLD = 0.85          # minimum match confidence (1 - distance)
-SCAN_INTERVAL = 0.5                  # seconds between scans
-COOLDOWN_AFTER_MATCH = 5.0           # don't re-send same person for N seconds
-CAMERA_INDEX = 0                     # default webcam
+FACES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Data", "face_images")
+CONFIDENCE_THRESHOLD = 70.0     # LBPH: lower distance = better match. < 70 = good match
+SCAN_INTERVAL = 0.8             # seconds between scans
+COOLDOWN_AFTER_MATCH = 5.0      # don't re-send same person for N seconds
+CAMERA_INDEX = 0                # default webcam
 
 # ── Global state ─────────────────────────────────────────────────
-clients = []                         # connected TCP sockets
+clients = []
 clients_lock = threading.Lock()
-known_encodings = []                 # list of numpy arrays
-known_names = []                     # parallel list of names
-last_match_time = {}                 # name -> timestamp (cooldown tracking)
+known_names = []                # list of player names
+label_map = {}                  # label_id -> name
+face_recognizer = None
+face_cascade = None
 
 
-def load_embeddings():
-    """Load all .pkl face embeddings from Data/face_embeddings/."""
-    global known_encodings, known_names
-    known_encodings.clear()
-    known_names.clear()
+def load_faces():
+    """Load enrolled faces and train the LBPH recognizer."""
+    global known_names, label_map, face_recognizer, face_cascade
 
-    if not os.path.isdir(EMBEDDINGS_DIR):
-        os.makedirs(EMBEDDINGS_DIR, exist_ok=True)
-        print(f"[Server] Created embeddings dir: {EMBEDDINGS_DIR}")
-        print("[Server] No enrolled faces yet. Run enroll_face.py to add players.")
-        return
+    # Load OpenCV's built-in face detector
+    cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    face_cascade = cv2.CascadeClassifier(cascade_path)
+    if face_cascade.empty():
+        print("[Server] ERROR: Could not load face cascade classifier!")
+        sys.exit(1)
 
-    count = 0
-    for fname in os.listdir(EMBEDDINGS_DIR):
-        if not fname.endswith(".pkl"):
+    print(f"[Server] Looking for enrolled faces in: {FACES_DIR}")
+    
+    if not os.path.isdir(FACES_DIR):
+        os.makedirs(FACES_DIR, exist_ok=True)
+        print(f"[Server] Created faces dir: {FACES_DIR}")
+        print("[Server] No enrolled faces yet.")
+        print(f"[Server] To enroll: python enroll_face.py --name \"Shahd\"")
+        return False
+
+    faces = []
+    labels = []
+    label_id = 0
+
+    for name in sorted(os.listdir(FACES_DIR)):
+        player_dir = os.path.join(FACES_DIR, name)
+        if not os.path.isdir(player_dir):
             continue
-        path = os.path.join(EMBEDDINGS_DIR, fname)
-        try:
-            with open(path, "rb") as f:
-                data = pickle.load(f)
-            name = data["name"]
-            encoding = data["encoding"]
-            known_names.append(name)
-            known_encodings.append(encoding)
-            count += 1
-            print(f"[Server] Loaded face: {name}")
-        except Exception as e:
-            print(f"[Server] Failed to load {fname}: {e}")
 
-    print(f"[Server] {count} face(s) loaded from {EMBEDDINGS_DIR}")
+        images = [f for f in os.listdir(player_dir)
+                  if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))]
+        
+        if not images:
+            print(f"[Server] Warning: {name}/ has no images, skipping")
+            continue
+
+        for img_file in images:
+            img_path = os.path.join(player_dir, img_file)
+            img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+            if img is None:
+                continue
+
+            # Detect face in the reference image
+            detected = face_cascade.detectMultiScale(img, 1.1, 5, minSize=(80, 80))
+            if len(detected) == 0:
+                # Try with the whole image
+                resized = cv2.resize(img, (200, 200))
+                faces.append(resized)
+                labels.append(label_id)
+                print(f"[Server] Loaded: {name}/{img_file} (full image)")
+            else:
+                for (x, y, w, h) in detected:
+                    face_roi = img[y:y+h, x:x+w]
+                    face_roi = cv2.resize(face_roi, (200, 200))
+                    faces.append(face_roi)
+                    labels.append(label_id)
+                    print(f"[Server] Loaded: {name}/{img_file} (face detected)")
+
+        label_map[label_id] = name
+        known_names.append(name)
+        label_id += 1
+
+    if not faces:
+        print("[Server] No face images found to train on.")
+        return False
+
+    # Train the LBPH recognizer
+    try:
+        face_recognizer = cv2.face.LBPHFaceRecognizer_create()
+    except AttributeError:
+        print("[Server] ERROR: cv2.face module not available!")
+        print("[Server] Install with: pip install opencv-contrib-python")
+        return False
+
+    face_recognizer.train(faces, np.array(labels))
+    print(f"[Server] Trained recognizer with {len(faces)} image(s) from {len(known_names)} player(s)")
+    return True
 
 
 def broadcast(message: str):
@@ -97,12 +149,11 @@ def broadcast(message: str):
 
 def handle_client(conn, addr):
     """Handle a single TCP client connection."""
-    print(f"[Server] Client connected: {addr}")
+    print(f"[Server] C# client connected: {addr}")
     with clients_lock:
         clients.append(conn)
     try:
         while True:
-            # Keep connection alive; we don't expect data from C# client
             data = conn.recv(1024)
             if not data:
                 break
@@ -116,7 +167,7 @@ def handle_client(conn, addr):
             conn.close()
         except Exception:
             pass
-        print(f"[Server] Client disconnected: {addr}")
+        print(f"[Server] C# client disconnected: {addr}")
 
 
 def tcp_server():
@@ -135,12 +186,21 @@ def tcp_server():
 
 def camera_loop():
     """Capture webcam frames and perform face recognition."""
+    global face_recognizer, face_cascade
+
+    if face_recognizer is None:
+        print("[Server] No trained model — camera loop waiting.")
+        print(f"[Server] Enroll faces first: python enroll_face.py --name \"PlayerName\"")
+        while True:
+            time.sleep(10)
+
     print(f"[Server] Opening camera {CAMERA_INDEX}...")
     cap = cv2.VideoCapture(CAMERA_INDEX)
 
     if not cap.isOpened():
-        print("[Server] ERROR: Cannot open camera. Face recognition disabled.")
-        return
+        print("[Server] ERROR: Cannot open camera.")
+        while True:
+            time.sleep(10)
 
     print("[Server] Camera opened. Scanning for faces...")
 
@@ -150,36 +210,25 @@ def camera_loop():
             time.sleep(0.1)
             continue
 
-        # Downscale for speed
-        small = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
-        rgb_small = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        detected_faces = face_cascade.detectMultiScale(gray, 1.1, 5, minSize=(80, 80))
 
-        # Detect faces
-        locations = face_recognition.face_locations(rgb_small)
-        if not locations:
-            time.sleep(SCAN_INTERVAL)
-            continue
+        for (x, y, w, h) in detected_faces:
+            face_roi = gray[y:y+h, x:x+w]
+            face_roi = cv2.resize(face_roi, (200, 200))
 
-        # Encode detected faces
-        encodings = face_recognition.face_encodings(rgb_small, locations)
+            label_id, distance = face_recognizer.predict(face_roi)
 
-        for enc in encodings:
-            if not known_encodings:
-                break
-
-            # Compare against all known faces
-            distances = face_recognition.face_distance(known_encodings, enc)
-            best_idx = int(np.argmin(distances))
-            best_distance = distances[best_idx]
-            confidence = 1.0 - best_distance
-
-            if confidence >= CONFIDENCE_THRESHOLD:
-                name = known_names[best_idx]
+            if distance < CONFIDENCE_THRESHOLD:
+                name = label_map.get(label_id, "Unknown")
                 now = time.time()
 
-                # Cooldown: don't spam the same person
+                # Cooldown
                 if name in last_match_time and (now - last_match_time[name]) < COOLDOWN_AFTER_MATCH:
                     continue
+
+                # Convert distance to 0-1 confidence (lower distance = higher confidence)
+                confidence = max(0.0, min(1.0, 1.0 - (distance / 100.0)))
 
                 last_match_time[name] = now
                 msg = json.dumps({
@@ -187,20 +236,25 @@ def camera_loop():
                     "user_name": name,
                     "confidence": round(confidence, 3)
                 })
-                print(f"[Server] Match: {name} ({confidence:.2%})")
+                print(f"[Server] Match: {name} (distance: {distance:.1f}, confidence: {confidence:.1%})")
                 broadcast(msg)
+                break  # One match per frame
 
         time.sleep(SCAN_INTERVAL)
 
     cap.release()
 
 
+last_match_time = {}
+
+
 def main():
     print("=" * 56)
-    print("  Smart Padel Coaching — Face Recognition Server")
+    print("  Smart Padel Coaching - Face Recognition Server")
+    print("  (OpenCV LBPH - Pure Python, No Heavy AI)")
     print("=" * 56)
 
-    load_embeddings()
+    ready = load_faces()
 
     # Start TCP server in background thread
     tcp_thread = threading.Thread(target=tcp_server, daemon=True)

@@ -12,7 +12,12 @@
     "Gender": "Male",
     "Age": 21,
     "Level": "HighSchool"
+  },
+  {
+    "Name": "Shahd",
+    "Gender": "Female",
+    "Age": 21,
+    "Level": "Primary",
+    "FaceId": "Shahd"
   }
-
 ]
-
