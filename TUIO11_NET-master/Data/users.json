@@ -1,0 +1,18 @@
+[
+  {
+    "BluetoothId": "E8:3A:12:40:1A:70",
+    "Name": "MOSTAFA_ESSAM",
+    "Gender": "Male",
+    "Age": 21,
+    "Level": "HighSchool"
+  },
+  {
+    "BluetoothId": "D8:8A:DC:DE:C8:76",
+    "Name": "Mostafa",
+    "Gender": "Male",
+    "Age": 21,
+    "Level": "HighSchool"
+  }
+
+]
+

@@ -1,0 +1,197 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\data\\users.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|solutionrelative:data\\users.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|m:\\cs\\hci_padel_idea\\hci project\\tuio11_net-master\\tuiodemo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|solutionrelative:tuiodemo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\userloader.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|solutionrelative:userloader.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\tuiodemo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form",
+      "RelativeMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|solutionrelative:tuiodemo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\userdata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|solutionrelative:userdata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\gestureclient.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|solutionrelative:gestureclient.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\data\\primary_vocabulary.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|solutionrelative:data\\primary_vocabulary.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\data\\high_vocabulary.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|solutionrelative:data\\high_vocabulary.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\data\\secondary_vocabulary.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|solutionrelative:data\\secondary_vocabulary.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\competitionmode.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|solutionrelative:competitionmode.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\worditemdata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{83F18314-A320-4148-A5A5-D8FD091FC407}|TUIO_DEMO.csproj|solutionrelative:worditemdata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 100,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 5,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "GestureClient.cs",
+              "DocumentMoniker": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\GestureClient.cs",
+              "RelativeDocumentMoniker": "GestureClient.cs",
+              "ToolTip": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\GestureClient.cs",
+              "RelativeToolTip": "GestureClient.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAIYAAAArAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-23T22:36:34.995Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "WordItemData.cs",
+              "DocumentMoniker": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\WordItemData.cs",
+              "RelativeDocumentMoniker": "WordItemData.cs",
+              "ToolTip": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\WordItemData.cs",
+              "RelativeToolTip": "WordItemData.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-18T22:32:37.431Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "TuioDemo.cs",
+              "DocumentMoniker": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\TuioDemo.cs",
+              "RelativeDocumentMoniker": "TuioDemo.cs",
+              "ToolTip": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\TuioDemo.cs",
+              "RelativeToolTip": "TuioDemo.cs",
+              "ViewState": "AgIAAFMCAAAAAAAAAAAhwGECAAAsAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-14T21:32:36.933Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "CompetitionMode.cs",
+              "DocumentMoniker": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\CompetitionMode.cs",
+              "RelativeDocumentMoniker": "CompetitionMode.cs",
+              "ToolTip": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\CompetitionMode.cs",
+              "RelativeToolTip": "CompetitionMode.cs",
+              "ViewState": "AgIAAGUHAAAAAAAAAAAswHsHAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-22T21:31:08.525Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "UserData.cs",
+              "DocumentMoniker": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\UserData.cs",
+              "RelativeDocumentMoniker": "UserData.cs",
+              "ToolTip": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\UserData.cs",
+              "RelativeToolTip": "UserData.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABIAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-19T12:55:12.361Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "users.json",
+              "DocumentMoniker": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\Data\\users.json",
+              "RelativeDocumentMoniker": "Data\\users.json",
+              "ToolTip": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\Data\\users.json",
+              "RelativeToolTip": "Data\\users.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAAYAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2026-03-19T12:52:58.288Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "UserLoader.cs",
+              "DocumentMoniker": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\UserLoader.cs",
+              "RelativeDocumentMoniker": "UserLoader.cs",
+              "ToolTip": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\UserLoader.cs",
+              "RelativeToolTip": "UserLoader.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABIAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-20T22:58:11.348Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "high_vocabulary.json",
+              "DocumentMoniker": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\Data\\high_vocabulary.json",
+              "RelativeDocumentMoniker": "Data\\high_vocabulary.json",
+              "ToolTip": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\Data\\high_vocabulary.json",
+              "RelativeToolTip": "Data\\high_vocabulary.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACUAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2026-03-18T23:46:50.585Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "secondary_vocabulary.json",
+              "DocumentMoniker": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\Data\\secondary_vocabulary.json",
+              "RelativeDocumentMoniker": "Data\\secondary_vocabulary.json",
+              "ToolTip": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\Data\\secondary_vocabulary.json",
+              "RelativeToolTip": "Data\\secondary_vocabulary.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACUAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2026-03-18T23:34:38.424Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "primary_vocabulary.json",
+              "DocumentMoniker": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\Data\\primary_vocabulary.json",
+              "RelativeDocumentMoniker": "Data\\primary_vocabulary.json",
+              "ToolTip": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\Data\\primary_vocabulary.json",
+              "RelativeToolTip": "Data\\primary_vocabulary.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACUAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2026-03-18T22:29:01.431Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "TuioDemo.cs [Design]",
+              "DocumentMoniker": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\TuioDemo.cs",
+              "RelativeDocumentMoniker": "TuioDemo.cs",
+              "ToolTip": "M:\\CS\\HCI_Padel_Idea\\HCI Project\\TUIO11_NET-master\\TuioDemo.cs [Design]",
+              "RelativeToolTip": "TuioDemo.cs [Design]",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-14T21:32:33.986Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

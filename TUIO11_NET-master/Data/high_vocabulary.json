@@ -1,0 +1,38 @@
+[
+  {
+    "Word": "PHENOMENON",
+    "Meaning": "A remarkable observable fact",
+    "Example": "Climate change is a global phenomenon.",
+    "ImageName": "phenomenon.png"
+  },
+  {
+    "Word": "ELOQUENT",
+    "Meaning": "Fluent and persuasive in speech",
+    "Example": "Her eloquent speech moved the audience.",
+    "ImageName": "eloquent.png"
+  },
+  {
+    "Word": "PERSEVERANCE",
+    "Meaning": "Continued effort despite hardship",
+    "Example": "Success demands perseverance.",
+    "ImageName": "perseverance.png"
+  },
+  {
+    "Word": "AMBIGUOUS",
+    "Meaning": "Open to more than one interpretation",
+    "Example": "His answer was deliberately ambiguous.",
+    "ImageName": "ambiguous.png"
+  },
+  {
+    "Word": "HYPOTHESIS",
+    "Meaning": "A proposed explanation to be tested",
+    "Example": "The hypothesis was proven correct.",
+    "ImageName": "hypothesis.png"
+  },
+  {
+    "Word": "PARADOX",
+    "Meaning": "A self-contradicting statement",
+    "Example": "It is a paradox that silence speaks loudly.",
+    "ImageName": "paradox.png"
+  }
+]

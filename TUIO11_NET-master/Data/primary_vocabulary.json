@@ -1,0 +1,38 @@
+[
+  {
+    "Word": "APPLE",
+    "Meaning": "A red fruit",
+    "Example": "This is an apple.",
+    "ImageName": "apple.png"
+  },
+  {
+    "Word": "BANANA",
+    "Meaning": "A yellow fruit",
+    "Example": "I like bananas.",
+    "ImageName": "banana.png"
+  },
+  {
+    "Word": "BALL",
+    "Meaning": "A round toy",
+    "Example": "The ball is red.",
+    "ImageName": "ball.png"
+  },
+  {
+    "Word": "CAT",
+    "Meaning": "A small animal",
+    "Example": "The cat is cute.",
+    "ImageName": "cat.png"
+  },
+  {
+    "Word": "DOG",
+    "Meaning": "A friendly animal",
+    "Example": "The dog can run.",
+    "ImageName": "dog.png"
+  },
+  {
+    "Word": "CAR",
+    "Meaning": "A road vehicle",
+    "Example": "This is my car.",
+    "ImageName": "car.png"
+  }
+]

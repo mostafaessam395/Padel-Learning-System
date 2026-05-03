@@ -1,0 +1,38 @@
+[
+  {
+    "Word": "ENVIRONMENT",
+    "Meaning": "Natural surroundings",
+    "Example": "We must protect the environment.",
+    "ImageName": "environment.png"
+  },
+  {
+    "Word": "JOURNEY",
+    "Meaning": "A long trip or experience",
+    "Example": "Learning is a lifelong journey.",
+    "ImageName": "journey.png"
+  },
+  {
+    "Word": "CURIOUS",
+    "Meaning": "Eager to know or learn",
+    "Example": "She was curious about the result.",
+    "ImageName": "curious.png"
+  },
+  {
+    "Word": "EFFICIENT",
+    "Meaning": "Achieving results with less effort",
+    "Example": "A good student is efficient.",
+    "ImageName": "efficient.png"
+  },
+  {
+    "Word": "ANCIENT",
+    "Meaning": "Very old, from long ago",
+    "Example": "They discovered an ancient city.",
+    "ImageName": "ancient.png"
+  },
+  {
+    "Word": "DIVERSE",
+    "Meaning": "Showing variety and difference",
+    "Example": "Our class is diverse and rich.",
+    "ImageName": "diverse.png"
+  }
+]
