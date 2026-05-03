@@ -40,6 +40,9 @@ public class FaceIDClient : IDisposable
     {
         try
         {
+            // Clean up any previous connection before reconnecting
+            Cleanup();
+
             Console.WriteLine($"[FaceIDClient] Connecting to {host}:{port}...");
             _client = new TcpClient();
             _client.Connect(host, port);

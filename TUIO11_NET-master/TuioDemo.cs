@@ -1672,8 +1672,11 @@ public class HomePage : Form, TuioListener
 
     private void ConnectFaceIDWithRetry()
     {
-        try { _faceIDClient.Connect("127.0.0.1", 5001); }
-        catch (Exception ex) { Console.WriteLine($"[HomePage] FaceID connect failed: {ex.Message}"); }
+        Task.Run(() =>
+        {
+            try { _faceIDClient.Connect("127.0.0.1", 5001); }
+            catch (Exception ex) { Console.WriteLine($"[HomePage] FaceID connect failed: {ex.Message}"); }
+        });
     }
 
     private void StartFaceScanWindow()
@@ -1736,65 +1739,72 @@ public class HomePage : Form, TuioListener
         if (user == null) return;
 
         _faceLoginCompleted = true;
-        _faceScanTimeoutTimer?.Stop();
 
-        this.BeginInvoke((MethodInvoker)(() =>
+        try
         {
-            // Update HUD to success state
-            _faceScanStatusLabel.Text = $"Welcome, {user.Name}!";
-            _faceScanSubLabel.Text = $"Identity confirmed  •  {MapDisplayedLevel(user.Level)} level";
-            _faceScanHUD.FillColor = Color.FromArgb(215, 15, 55, 35);
-            _faceScanHUD.BorderColor = Color.FromArgb(140, 60, 220, 100);
-            _faceScanHUD.Invalidate();
-            _faceScanRing.Invalidate();
-
-            lblFooter.Text = "Player identified: " + user.Name;
-            lblInstruction.Text = MapDetectedPlayerLevel(user.Level);
-
-            // TTS greeting
-            try
+            this.BeginInvoke((MethodInvoker)(() =>
             {
-                if (_homeSynth != null && !AppSettings.IsMuted)
+                // Stop the timeout timer on UI thread (thread-safe)
+                _faceScanTimeoutTimer?.Stop();
+                _bluetoothTimer?.Stop();
+
+                // Update HUD to success state
+                _faceScanStatusLabel.Text = $"Welcome, {user.Name}!";
+                _faceScanSubLabel.Text = $"Identity confirmed  •  {MapDisplayedLevel(user.Level)} level";
+                _faceScanHUD.FillColor = Color.FromArgb(215, 15, 55, 35);
+                _faceScanHUD.BorderColor = Color.FromArgb(140, 60, 220, 100);
+                _faceScanHUD.Invalidate();
+                _faceScanRing.Invalidate();
+
+                lblFooter.Text = "Player identified: " + user.Name;
+                lblInstruction.Text = MapDetectedPlayerLevel(user.Level);
+
+                // TTS greeting
+                try
                 {
-                    _homeSynth.Rate = AppSettings.VoiceRate;
-                    _homeSynth.SpeakAsyncCancelAll();
-                    _homeSynth.SpeakAsync(
-                        $"Identity confirmed. Welcome, {user.Name}. " +
-                        $"Loading {MapDisplayedLevel(user.Level)} Padel modules.");
+                    if (_homeSynth != null && !AppSettings.IsMuted)
+                    {
+                        _homeSynth.Rate = AppSettings.VoiceRate;
+                        _homeSynth.SpeakAsyncCancelAll();
+                        _homeSynth.SpeakAsync(
+                            $"Identity confirmed. Welcome, {user.Name}. " +
+                            $"Loading {MapDisplayedLevel(user.Level)} Padel modules.");
+                    }
                 }
-            }
-            catch { }
+                catch { }
 
-            // Navigate after a short delay so the player sees the greeting
-            var navTimer = new System.Windows.Forms.Timer { Interval = 2800 };
-            navTimer.Tick += (s2, e2) =>
-            {
-                navTimer.Stop();
-                navTimer.Dispose();
-                HideFaceScanHUD();
-
-                if (pageOpen) return;
-                pageOpen = true;
-                currentUser = user;
-
-                Form page = new LearningPage(user, client);
-                page.FormClosed += (s3, e3) =>
+                // Navigate after a short delay so the player sees the greeting
+                var navTimer = new System.Windows.Forms.Timer { Interval = 2800 };
+                navTimer.Tick += (s2, e2) =>
                 {
-                    pageOpen = false;
-                    currentUser = null;
-                    _faceLoginCompleted = false;
-                    lblInstruction.Text = "Waiting to detect your player level automatically...";
-                    lblFooter.Text = "Scanning for player...";
-                    this.Show();
-                    // Restart face scan window (5 s), then Bluetooth fallback
-                    StartFaceScanWindow();
-                };
+                    navTimer.Stop();
+                    navTimer.Dispose();
+                    HideFaceScanHUD();
 
-                page.Show();
-                this.Hide();
-            };
-            navTimer.Start();
-        }));
+                    if (pageOpen) return;
+                    pageOpen = true;
+                    currentUser = user;
+
+                    Form page = new LearningPage(user, client);
+                    page.FormClosed += (s3, e3) =>
+                    {
+                        pageOpen = false;
+                        currentUser = null;
+                        _faceLoginCompleted = false;
+                        lblInstruction.Text = "Waiting to detect your player level automatically...";
+                        lblFooter.Text = "Scanning for player...";
+                        this.Show();
+                        // Restart face scan window (5 s), then Bluetooth fallback
+                        StartFaceScanWindow();
+                    };
+
+                    page.Show();
+                    this.Hide();
+                };
+                navTimer.Start();
+            }));
+        }
+        catch { }
     }
 }
 
