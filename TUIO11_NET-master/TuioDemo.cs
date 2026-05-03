@@ -1961,6 +1961,16 @@ public class LearningPage : Form, TuioListener
     private RoundedShadowPanel primaryImageFrame;
     private PictureBox picPrimaryStudent;
     private Image primaryStudentImage;
+
+    // ── Gaze Tracking & Adaptive Coaching ──────────────────────
+    private GazeClient _gazeClient;
+    private AnalyticsEngine _analyticsEngine;
+    private System.Windows.Forms.Timer _gazeReconnectTimer;
+    private System.Windows.Forms.Timer _focusGlowTimer;
+    private float _glowPhase = 0f;
+    private List<RoundedShadowPanel> _glowCards = new List<RoundedShadowPanel>();
+    private Dictionary<RoundedShadowPanel, Color> _originalBorderColors = new Dictionary<RoundedShadowPanel, Color>();
+    private SpeechSynthesizer _learningSynth;
     private void BuildWelcomeLabel()
     {
         lblWelcomeUser = new Label();
@@ -2029,6 +2039,10 @@ public class LearningPage : Form, TuioListener
         // Subscribe to gesture router
         this.Shown += (s, e) => { GestureRouter.OnGestureMarker += HandleGestureMarker; };
         this.FormClosed += (s, e) => { GestureRouter.OnGestureMarker -= HandleGestureMarker; };
+
+        // ── Initialize Gaze Tracking & Adaptive UI ──
+        InitializeGazeTracking();
+        ApplyAdaptiveLayout();
     }
 
     private bool IsPrimary()
@@ -3064,6 +3078,30 @@ public class LearningPage : Form, TuioListener
     {
         client.removeTuioListener(this);
 
+        // ── Save gaze session data ──
+        try
+        {
+            if (_analyticsEngine != null && _analyticsEngine.IsActive)
+            {
+                _analyticsEngine.StopSession();
+                var sessionScores = _analyticsEngine.ComputeSessionScores();
+                AnalyticsEngine.UpdateAndSaveProfile(currentUser, sessionScores);
+                Console.WriteLine("[LearningPage] Gaze session saved.");
+                foreach (var kvp in sessionScores)
+                    Console.WriteLine($"  {kvp.Key}: {kvp.Value}");
+            }
+        }
+        catch (Exception ex) { Console.WriteLine($"[LearningPage] Gaze save error: {ex.Message}"); }
+
+        // ── Cleanup gaze resources ──
+        _focusGlowTimer?.Stop();
+        _focusGlowTimer?.Dispose();
+        _gazeReconnectTimer?.Stop();
+        _gazeReconnectTimer?.Dispose();
+        GazeRouter.OnGazePoint -= HandleGazePoint;
+        _gazeClient?.Disconnect();
+        try { _learningSynth?.Dispose(); } catch { }
+
         if (primaryStudentImage != null)
         {
             primaryStudentImage.Dispose();
@@ -3071,6 +3109,121 @@ public class LearningPage : Form, TuioListener
         }
 
         base.OnFormClosed(e);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  Gaze Tracking & Adaptive Visual Coaching
+    // ══════════════════════════════════════════════════════════════
+
+    private void InitializeGazeTracking()
+    {
+        // TTS for proactive coaching
+        try
+        {
+            _learningSynth = new SpeechSynthesizer();
+            _learningSynth.Rate = 0;
+            _learningSynth.Volume = 100;
+            foreach (InstalledVoice v in _learningSynth.GetInstalledVoices())
+                if (v.VoiceInfo.Culture.Name.StartsWith("en"))
+                { _learningSynth.SelectVoice(v.VoiceInfo.Name); break; }
+        }
+        catch { _learningSynth = null; }
+
+        // Start analytics session
+        _analyticsEngine = new AnalyticsEngine();
+        _analyticsEngine.StartSession();
+
+        // Subscribe to gaze events
+        GazeRouter.OnGazePoint += HandleGazePoint;
+
+        // Connect to gaze server
+        _gazeClient = new GazeClient();
+        Task.Run(() =>
+        {
+            try { _gazeClient.Connect("127.0.0.1", 5002); }
+            catch { }
+        });
+
+        _gazeReconnectTimer = new System.Windows.Forms.Timer { Interval = 4000 };
+        _gazeReconnectTimer.Tick += (s, e) =>
+        {
+            if (!_gazeClient.IsConnected)
+                Task.Run(() => { try { _gazeClient.Connect("127.0.0.1", 5002); } catch { } });
+        };
+        _gazeReconnectTimer.Start();
+    }
+
+    private void HandleGazePoint(float x, float y)
+    {
+        _analyticsEngine?.AddGazePoint(x, y);
+    }
+
+    private void ApplyAdaptiveLayout()
+    {
+        if (currentUser?.GazeProfile == null) return;
+        var gp = currentUser.GazeProfile;
+
+        // Get weak categories (score < 40)
+        var weakCats = AnalyticsEngine.GetWeakCategories(gp, 40);
+        if (weakCats.Count == 0) return;
+
+        // Map category names to card controls
+        var cardMap = new Dictionary<string, RoundedShadowPanel>
+        {
+            { "Strokes", cardVocabulary },
+            { "Rules", cardGrammar },
+            { "Practice", cardArranging },
+            { "Quiz", cardQuiz },
+            { "Spelling", cardSpelling },
+            { "Competition", cardCompetition }
+        };
+
+        // Apply Focus Glow to weak-score cards
+        _glowCards.Clear();
+        _originalBorderColors.Clear();
+        foreach (var weak in weakCats)
+        {
+            if (cardMap.ContainsKey(weak.Key))
+            {
+                var card = cardMap[weak.Key];
+                _originalBorderColors[card] = card.BorderColor;
+                _glowCards.Add(card);
+            }
+        }
+
+        // Start Focus Glow pulsing animation
+        if (_glowCards.Count > 0)
+        {
+            _focusGlowTimer = new System.Windows.Forms.Timer { Interval = 45 };
+            _focusGlowTimer.Tick += (s, e) =>
+            {
+                _glowPhase += 0.08f;
+                if (_glowPhase > 6.28f) _glowPhase = 0f;
+                float glow = 0.5f + 0.5f * (float)Math.Sin(_glowPhase);
+                int alpha = (int)(120 + 135 * glow);
+                Color pulseColor = Color.FromArgb(alpha, 255, 180, 40);
+                foreach (var card in _glowCards)
+                {
+                    card.BorderColor = pulseColor;
+                    card.BorderThickness = 2.5f + 1.5f * glow;
+                    card.Invalidate();
+                }
+            };
+            _focusGlowTimer.Start();
+        }
+
+        // Proactive TTS coaching
+        if (weakCats.Count > 0 && _learningSynth != null && !AppSettings.IsMuted)
+        {
+            string weakName = AnalyticsEngine.GetCardDisplayName(weakCats[0].Key);
+            try
+            {
+                _learningSynth.SpeakAsync(
+                    $"Welcome back! I noticed you skipped {weakName} last time. " +
+                    $"Let's focus on it today to master your game.");
+            }
+            catch { }
+        }
     }
 
     public void updateTuioObject(TuioObject o) { }

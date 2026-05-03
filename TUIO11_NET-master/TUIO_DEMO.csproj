@@ -50,8 +50,10 @@
   </Target>
   -->
   <ItemGroup>
+    <Compile Include="AnalyticsEngine.cs" />
     <Compile Include="CompetitionMode.cs" />
     <Compile Include="FaceIDClient.cs" />
+    <Compile Include="GazeClient.cs" />
     <Compile Include="GestureClient.cs" />
     <Compile Include="OSC.NET\OSCBundle.cs" />
     <Compile Include="OSC.NET\OSCMessage.cs" />

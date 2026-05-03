@@ -1,0 +1,261 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using Newtonsoft.Json;
+
+/// <summary>
+/// Processes raw gaze points into fixations, maps them to UI activity regions,
+/// calculates per-category attention scores, and persists the GazeProfile.
+/// </summary>
+public class AnalyticsEngine
+{
+    // ── Activity region definitions (normalized 0–1 screen coords) ──
+    // Row 1: Strokes, Rules, Practice  |  Row 2: Quiz, Spelling, Competition
+    private static readonly Dictionary<string, RectangleF> ActivityRegions = new Dictionary<string, RectangleF>
+    {
+        { "Strokes",     new RectangleF(0.05f, 0.35f, 0.30f, 0.30f) },
+        { "Rules",       new RectangleF(0.35f, 0.35f, 0.30f, 0.30f) },
+        { "Practice",    new RectangleF(0.65f, 0.35f, 0.30f, 0.30f) },
+        { "Quiz",        new RectangleF(0.05f, 0.65f, 0.30f, 0.25f) },
+        { "Spelling",    new RectangleF(0.35f, 0.65f, 0.30f, 0.25f) },
+        { "Competition", new RectangleF(0.65f, 0.65f, 0.30f, 0.25f) }
+    };
+
+    // ── Fixation detection params ──
+    private const float FIXATION_RADIUS = 0.04f;   // normalized distance threshold
+    private const int FIXATION_MIN_MS = 200;        // minimum dwell time in ms
+
+    // ── Session data ──
+    private readonly List<GazePoint> _rawPoints = new List<GazePoint>();
+    private readonly List<Fixation> _fixations = new List<Fixation>();
+    private readonly Dictionary<string, float> _timeOnTarget = new Dictionary<string, float>();
+    private DateTime _sessionStart;
+    private bool _isActive;
+
+    private struct GazePoint
+    {
+        public float X, Y;
+        public DateTime Timestamp;
+    }
+
+    private struct Fixation
+    {
+        public float X, Y;
+        public float DurationMs;
+    }
+
+    // ── Public API ──
+
+    public void StartSession()
+    {
+        _rawPoints.Clear();
+        _fixations.Clear();
+        _timeOnTarget.Clear();
+        foreach (var key in ActivityRegions.Keys)
+            _timeOnTarget[key] = 0f;
+        _sessionStart = DateTime.Now;
+        _isActive = true;
+    }
+
+    public void StopSession()
+    {
+        _isActive = false;
+    }
+
+    public bool IsActive => _isActive;
+
+    /// <summary>
+    /// Feed a raw gaze point (called from GazeRouter handler).
+    /// </summary>
+    public void AddGazePoint(float x, float y)
+    {
+        if (!_isActive) return;
+        _rawPoints.Add(new GazePoint { X = x, Y = y, Timestamp = DateTime.Now });
+    }
+
+    /// <summary>
+    /// Process all collected gaze points into fixations and attention scores.
+    /// Call this when session ends.
+    /// </summary>
+    public Dictionary<string, int> ComputeSessionScores()
+    {
+        DetectFixations();
+        MapFixationsToRegions();
+        return CalculateAttentionScores();
+    }
+
+    /// <summary>
+    /// Update the user's GazeProfile using weighted moving average:
+    ///   Score_new = Score_old × 0.7 + SessionScore × 0.3
+    /// Then persist to users.json.
+    /// </summary>
+    public static void UpdateAndSaveProfile(TuioDemo.UserData user, Dictionary<string, int> sessionScores)
+    {
+        if (user.GazeProfile == null)
+            user.GazeProfile = new TuioDemo.GazeProfile();
+
+        var gp = user.GazeProfile;
+        gp.Strokes_Score     = WeightedAvg(gp.Strokes_Score,     sessionScores.ContainsKey("Strokes") ? sessionScores["Strokes"] : 50);
+        gp.Rules_Score       = WeightedAvg(gp.Rules_Score,       sessionScores.ContainsKey("Rules") ? sessionScores["Rules"] : 50);
+        gp.Practice_Score    = WeightedAvg(gp.Practice_Score,    sessionScores.ContainsKey("Practice") ? sessionScores["Practice"] : 50);
+        gp.Quiz_Score        = WeightedAvg(gp.Quiz_Score,        sessionScores.ContainsKey("Quiz") ? sessionScores["Quiz"] : 50);
+        gp.Spelling_Score    = WeightedAvg(gp.Spelling_Score,    sessionScores.ContainsKey("Spelling") ? sessionScores["Spelling"] : 50);
+        gp.Competition_Score = WeightedAvg(gp.Competition_Score, sessionScores.ContainsKey("Competition") ? sessionScores["Competition"] : 50);
+
+        PersistUsers();
+    }
+
+    /// <summary>
+    /// Get the categories that need focus (score below threshold).
+    /// Returns list of (CategoryName, Score) sorted ascending.
+    /// </summary>
+    public static List<KeyValuePair<string, int>> GetWeakCategories(TuioDemo.GazeProfile profile, int threshold = 40)
+    {
+        if (profile == null) return new List<KeyValuePair<string, int>>();
+
+        var scores = new Dictionary<string, int>
+        {
+            { "Strokes", profile.Strokes_Score },
+            { "Rules", profile.Rules_Score },
+            { "Practice", profile.Practice_Score },
+            { "Quiz", profile.Quiz_Score },
+            { "Spelling", profile.Spelling_Score },
+            { "Competition", profile.Competition_Score }
+        };
+
+        return scores.Where(kv => kv.Value < threshold)
+                     .OrderBy(kv => kv.Value)
+                     .ToList();
+    }
+
+    /// <summary>
+    /// Get the display name for the card corresponding to a category name.
+    /// </summary>
+    public static string GetCardDisplayName(string category)
+    {
+        switch (category)
+        {
+            case "Strokes": return "Learn Strokes";
+            case "Rules": return "Court Rules";
+            case "Practice": return "Practice";
+            case "Quiz": return "Quick Challenge";
+            case "Spelling": return "Speed Mode";
+            case "Competition": return "Competition";
+            default: return category;
+        }
+    }
+
+    // ── Internal logic ──
+
+    private void DetectFixations()
+    {
+        _fixations.Clear();
+        if (_rawPoints.Count < 2) return;
+
+        int i = 0;
+        while (i < _rawPoints.Count)
+        {
+            float sumX = _rawPoints[i].X, sumY = _rawPoints[i].Y;
+            int count = 1;
+            int j = i + 1;
+
+            while (j < _rawPoints.Count)
+            {
+                float cx = sumX / count, cy = sumY / count;
+                float dx = _rawPoints[j].X - cx, dy = _rawPoints[j].Y - cy;
+                float dist = (float)Math.Sqrt(dx * dx + dy * dy);
+
+                if (dist > FIXATION_RADIUS) break;
+                sumX += _rawPoints[j].X;
+                sumY += _rawPoints[j].Y;
+                count++;
+                j++;
+            }
+
+            float durationMs = (float)(_rawPoints[Math.Min(j - 1, _rawPoints.Count - 1)].Timestamp
+                                - _rawPoints[i].Timestamp).TotalMilliseconds;
+
+            if (durationMs >= FIXATION_MIN_MS)
+            {
+                _fixations.Add(new Fixation
+                {
+                    X = sumX / count,
+                    Y = sumY / count,
+                    DurationMs = durationMs
+                });
+            }
+
+            i = j;
+        }
+    }
+
+    private void MapFixationsToRegions()
+    {
+        foreach (var key in ActivityRegions.Keys.ToList())
+            _timeOnTarget[key] = 0f;
+
+        foreach (var fix in _fixations)
+        {
+            foreach (var kvp in ActivityRegions)
+            {
+                if (kvp.Value.Contains(fix.X, fix.Y))
+                {
+                    _timeOnTarget[kvp.Key] += fix.DurationMs;
+                    break;
+                }
+            }
+        }
+    }
+
+    private Dictionary<string, int> CalculateAttentionScores()
+    {
+        float totalTime = _timeOnTarget.Values.Sum();
+        var scores = new Dictionary<string, int>();
+
+        foreach (var kvp in _timeOnTarget)
+        {
+            int score;
+            if (totalTime <= 0)
+                score = 50; // neutral
+            else
+                score = Math.Min(100, (int)((kvp.Value / totalTime) * 600f)); // scale so equal attention ≈ 100
+
+            scores[kvp.Key] = score;
+        }
+
+        return scores;
+    }
+
+    private static int WeightedAvg(int oldScore, int sessionScore)
+    {
+        return (int)(oldScore * 0.7 + sessionScore * 0.3);
+    }
+
+    private static void PersistUsers()
+    {
+        try
+        {
+            string path = System.IO.Path.Combine(System.Windows.Forms.Application.StartupPath, "Data", "users.json");
+            if (!File.Exists(path)) return;
+            string json = File.ReadAllText(path);
+            var users = JsonConvert.DeserializeObject<List<TuioDemo.UserData>>(json);
+            string output = JsonConvert.SerializeObject(users, Formatting.Indented);
+            File.WriteAllText(path, output);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AnalyticsEngine] Failed to persist: {ex.Message}");
+        }
+    }
+}
+
+// Extension for RectangleF.Contains with floats
+internal static class RectFExtensions
+{
+    public static bool Contains(this RectangleF r, float x, float y)
+    {
+        return x >= r.X && x <= r.X + r.Width && y >= r.Y && y <= r.Y + r.Height;
+    }
+}
