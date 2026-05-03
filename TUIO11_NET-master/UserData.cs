@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -10,6 +10,7 @@ namespace TuioDemo
     {
         public string UserId { get; set; }
         public string BluetoothId { get; set; }    
+        public string FaceId { get; set; }
         public string Name { get; set; }
         public string Gender { get; set; }
         public int Age { get; set; }

@@ -621,6 +621,19 @@ public class HomePage : Form, TuioListener
 
     private bool isScanningBluetooth = false;
 
+    // ── Face Recognition ──────────────────────────────────
+    private FaceIDClient _faceIDClient;
+    private System.Windows.Forms.Timer _faceReconnectTimer;
+    private System.Windows.Forms.Timer _faceScanTimeoutTimer;
+    private bool _faceLoginCompleted = false;
+    private RoundedShadowPanel _faceScanHUD;
+    private Label _faceScanStatusLabel;
+    private Label _faceScanSubLabel;
+    private SmoothPanel _faceScanRing;
+    private System.Windows.Forms.Timer _facePulseTimer;
+    private float _facePulsePhase = 0f;
+    private SpeechSynthesizer _homeSynth;
+
     public HomePage(int port)
     {
         string path = Path.Combine(Application.StartupPath, "Data", "primary_vocabulary.json");
@@ -646,7 +659,7 @@ public class HomePage : Form, TuioListener
         _bluetoothTimer = new System.Windows.Forms.Timer();
         _bluetoothTimer.Interval = 100;
         _bluetoothTimer.Tick += (s, e) => CheckBluetoothAndLogin();
-        _bluetoothTimer.Start();
+        // Bluetooth starts AFTER face scan timeout (5 s) — see InitializeFaceID()
 
         this.Load += (s, e) => ArrangeControls();
         this.Resize += (s, e) => ArrangeControls();
@@ -662,6 +675,7 @@ public class HomePage : Form, TuioListener
         client.connect();
 
         InitializeGestureClient();
+        InitializeFaceID();
 
         _bookTimer = new System.Windows.Forms.Timer { Interval = 40 };
         _bookTimer.Tick += delegate { _bookAngle += 0.04; this.Invalidate(); };
@@ -885,10 +899,12 @@ public class HomePage : Form, TuioListener
             {
                 pageOpen = false;
                 currentUser = null;
+                _faceLoginCompleted = false;
                 lblInstruction.Text = "Waiting to detect your player level automatically...";
-                lblFooter.Text = "Waiting for Bluetooth connection...";
+                lblFooter.Text = "Scanning for player...";
                 this.Show();
-                _bluetoothTimer.Start();
+                // Restart face scan first, then Bluetooth fallback after 5 s
+                StartFaceScanWindow();
             };
 
             page.Show();
@@ -985,7 +1001,7 @@ public class HomePage : Form, TuioListener
             "high");
 
         lblFooter = new Label();
-        lblFooter.Text = "Waiting for Bluetooth connection...";
+        lblFooter.Text = "Scanning for player...";
         lblFooter.Font = new Font("Arial", 13, FontStyle.Italic);
         lblFooter.ForeColor = Color.White;
         lblFooter.AutoSize = false;
@@ -1002,6 +1018,87 @@ public class HomePage : Form, TuioListener
         overlayPanel.Controls.Add(lblFooter);
 
         this.Controls.Add(overlayPanel);
+
+        // ── Face Scan HUD ────────────────────────────────────────
+        _faceScanHUD = new RoundedShadowPanel
+        {
+            CornerRadius = 28,
+            FillColor = Color.FromArgb(210, 12, 20, 40),
+            BorderColor = Color.FromArgb(100, 80, 160, 255),
+            BorderThickness = 2f,
+            ShadowColor = Color.FromArgb(80, 0, 0, 0),
+            DrawGloss = false,
+            ShadowOffsetX = 6,
+            ShadowOffsetY = 10,
+            Size = new Size(400, 200),
+            Visible = false
+        };
+
+        _faceScanRing = new SmoothPanel();
+        _faceScanRing.Size = new Size(70, 70);
+        _faceScanRing.BackColor = Color.Transparent;
+        _faceScanRing.Paint += (s, ev) =>
+        {
+            Graphics g = ev.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            float glow = 0.5f + 0.5f * (float)Math.Sin(_facePulsePhase);
+            int alpha = (int)(100 + 120 * glow);
+            Color ringColor = _faceLoginCompleted
+                ? Color.FromArgb(alpha, 60, 220, 100)
+                : Color.FromArgb(alpha, 80, 160, 255);
+            using (Pen p = new Pen(ringColor, 3.5f))
+                g.DrawEllipse(p, 6, 6, 56, 56);
+            using (Pen p2 = new Pen(Color.FromArgb((int)(60 * glow), 255, 255, 255), 1.5f))
+                g.DrawEllipse(p2, 14, 14, 40, 40);
+            string icon = _faceLoginCompleted ? "\u2714" : "\uD83D\uDC64";
+            using (Font f = new Font("Segoe UI", 18, FontStyle.Regular))
+            using (SolidBrush b = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255)))
+            {
+                SizeF sz = g.MeasureString(icon, f);
+                g.DrawString(icon, f, b, 35 - sz.Width / 2, 35 - sz.Height / 2);
+            }
+        };
+        _faceScanRing.Location = new Point(30, 50);
+        _faceScanHUD.Controls.Add(_faceScanRing);
+
+        _faceScanStatusLabel = new Label
+        {
+            Text = "Scanning Face...",
+            Font = new Font("Arial", 18, FontStyle.Bold),
+            ForeColor = Color.FromArgb(230, 240, 255),
+            AutoSize = false,
+            Size = new Size(260, 34),
+            TextAlign = ContentAlignment.MiddleLeft,
+            BackColor = Color.Transparent,
+            Location = new Point(115, 60)
+        };
+        _faceScanHUD.Controls.Add(_faceScanStatusLabel);
+
+        _faceScanSubLabel = new Label
+        {
+            Text = "Stand in front of the camera",
+            Font = new Font("Arial", 11, FontStyle.Italic),
+            ForeColor = Color.FromArgb(160, 180, 210),
+            AutoSize = false,
+            Size = new Size(260, 24),
+            TextAlign = ContentAlignment.MiddleLeft,
+            BackColor = Color.Transparent,
+            Location = new Point(115, 100)
+        };
+        _faceScanHUD.Controls.Add(_faceScanSubLabel);
+
+        this.Controls.Add(_faceScanHUD);
+        _faceScanHUD.BringToFront();
+
+        // Pulse animation for the scan ring
+        _facePulseTimer = new System.Windows.Forms.Timer { Interval = 40 };
+        _facePulseTimer.Tick += (s, ev) =>
+        {
+            _facePulsePhase += 0.09f;
+            if (_facePulsePhase > 6.28f) _facePulsePhase = 0f;
+            if (_faceScanRing != null && _faceScanHUD.Visible)
+                _faceScanRing.Invalidate();
+        };
 
         lblWelcome.BringToFront();
         heroPanel.BringToFront();
@@ -1203,6 +1300,10 @@ public class HomePage : Form, TuioListener
         cardHighSchool.Location = new Point(startX + cardPrimary.Width + cardSecondary.Width + (spacing * 2), cardsY);
 
         lblFooter.Location = new Point((this.ClientSize.Width - lblFooter.Width) / 2, cardsY + 220);
+
+        // Position Face Scan HUD centered above the cards
+        if (_faceScanHUD != null)
+            _faceScanHUD.Location = new Point((this.ClientSize.Width - _faceScanHUD.Width) / 2, cardsY + 230);
 
         overlayPanel.Invalidate(true);
         heroPanel.Invalidate(true);
@@ -1429,6 +1530,17 @@ public class HomePage : Form, TuioListener
         _gestureClient?.Disconnect();
         GestureRouter.OnGestureMarker -= HandleGestureMarker;
 
+        // Face ID cleanup
+        _faceScanTimeoutTimer?.Stop();
+        _faceScanTimeoutTimer?.Dispose();
+        _faceReconnectTimer?.Stop();
+        _faceReconnectTimer?.Dispose();
+        _facePulseTimer?.Stop();
+        _facePulseTimer?.Dispose();
+        _faceIDClient?.Disconnect();
+        FaceIDRouter.OnFaceRecognized -= HandleFaceRecognized;
+        try { _homeSynth?.Dispose(); } catch { }
+
         base.OnFormClosed(e);
     }
 
@@ -1500,6 +1612,189 @@ public class HomePage : Form, TuioListener
             Console.WriteLine($"[HomePage] Gesture error: {ex.Message}");
             _isProcessingGesture = false;
         }
+    }
+
+    // ── Level mapping helpers ────────────────────────────────────
+
+    private string MapDisplayedLevel(string level)
+    {
+        if (string.IsNullOrEmpty(level)) return "Beginner";
+        if (level.IndexOf("Primary", StringComparison.OrdinalIgnoreCase) >= 0) return "Beginner";
+        if (level.IndexOf("Secondary", StringComparison.OrdinalIgnoreCase) >= 0) return "Intermediate";
+        if (level.IndexOf("High", StringComparison.OrdinalIgnoreCase) >= 0) return "Advanced";
+        return level;
+    }
+
+    private string MapDetectedPlayerLevel(string level)
+    {
+        string display = MapDisplayedLevel(level);
+        return $"{display} Padel level detected! Get ready to train 🎾";
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  Face Recognition Integration
+    // ══════════════════════════════════════════════════════════════
+
+    private void InitializeFaceID()
+    {
+        // Initialize TTS for greetings
+        try
+        {
+            _homeSynth = new SpeechSynthesizer();
+            _homeSynth.Rate = -1;
+            _homeSynth.Volume = 100;
+            foreach (InstalledVoice v in _homeSynth.GetInstalledVoices())
+            {
+                if (v.VoiceInfo.Culture.Name.StartsWith("en"))
+                { _homeSynth.SelectVoice(v.VoiceInfo.Name); break; }
+            }
+        }
+        catch { _homeSynth = null; }
+
+        // Subscribe to face recognition events
+        FaceIDRouter.OnFaceRecognized += HandleFaceRecognized;
+
+        // Connect to the Python face recognition server
+        _faceIDClient = new FaceIDClient();
+        ConnectFaceIDWithRetry();
+
+        _faceReconnectTimer = new System.Windows.Forms.Timer { Interval = 3000 };
+        _faceReconnectTimer.Tick += (s, e) =>
+        {
+            if (!_faceIDClient.IsConnected && !_faceLoginCompleted)
+                ConnectFaceIDWithRetry();
+        };
+        _faceReconnectTimer.Start();
+
+        // Start the 5-second face scan window
+        StartFaceScanWindow();
+    }
+
+    private void ConnectFaceIDWithRetry()
+    {
+        try { _faceIDClient.Connect("127.0.0.1", 5001); }
+        catch (Exception ex) { Console.WriteLine($"[HomePage] FaceID connect failed: {ex.Message}"); }
+    }
+
+    private void StartFaceScanWindow()
+    {
+        _faceLoginCompleted = false;
+
+        // Show the scanning HUD
+        if (_faceScanHUD != null)
+        {
+            _faceScanStatusLabel.Text = "Scanning Face...";
+            _faceScanSubLabel.Text = "Stand in front of the camera";
+            _faceScanHUD.FillColor = Color.FromArgb(210, 12, 20, 40);
+            _faceScanHUD.BorderColor = Color.FromArgb(100, 80, 160, 255);
+            _faceScanHUD.Visible = true;
+            _faceScanHUD.BringToFront();
+            _faceScanHUD.Invalidate();
+        }
+
+        _facePulseTimer?.Start();
+        lblFooter.Text = "Scanning for player...";
+
+        // 5-second timeout → fall back to Bluetooth
+        if (_faceScanTimeoutTimer != null)
+        {
+            _faceScanTimeoutTimer.Stop();
+            _faceScanTimeoutTimer.Dispose();
+        }
+
+        _faceScanTimeoutTimer = new System.Windows.Forms.Timer { Interval = 5000 };
+        _faceScanTimeoutTimer.Tick += (s, e) =>
+        {
+            _faceScanTimeoutTimer.Stop();
+            if (!_faceLoginCompleted && !pageOpen)
+            {
+                // Face scan timed out — fall back to Bluetooth
+                HideFaceScanHUD();
+                lblFooter.Text = "Face not recognized — scanning Bluetooth...";
+                _bluetoothTimer.Start();
+            }
+        };
+        _faceScanTimeoutTimer.Start();
+    }
+
+    private void HideFaceScanHUD()
+    {
+        _facePulseTimer?.Stop();
+        if (_faceScanHUD != null)
+            _faceScanHUD.Visible = false;
+    }
+
+    private void HandleFaceRecognized(string userName, float confidence)
+    {
+        if (_faceLoginCompleted || pageOpen || this.IsDisposed) return;
+
+        // Match against cached users by Name or FaceId
+        var user = cachedUsers.FirstOrDefault(u =>
+            string.Equals(u.Name?.Trim(), userName?.Trim(), StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(u.FaceId?.Trim(), userName?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        if (user == null) return;
+
+        _faceLoginCompleted = true;
+        _faceScanTimeoutTimer?.Stop();
+
+        this.BeginInvoke((MethodInvoker)(() =>
+        {
+            // Update HUD to success state
+            _faceScanStatusLabel.Text = $"Welcome, {user.Name}!";
+            _faceScanSubLabel.Text = $"Identity confirmed  •  {MapDisplayedLevel(user.Level)} level";
+            _faceScanHUD.FillColor = Color.FromArgb(215, 15, 55, 35);
+            _faceScanHUD.BorderColor = Color.FromArgb(140, 60, 220, 100);
+            _faceScanHUD.Invalidate();
+            _faceScanRing.Invalidate();
+
+            lblFooter.Text = "Player identified: " + user.Name;
+            lblInstruction.Text = MapDetectedPlayerLevel(user.Level);
+
+            // TTS greeting
+            try
+            {
+                if (_homeSynth != null && !AppSettings.IsMuted)
+                {
+                    _homeSynth.Rate = AppSettings.VoiceRate;
+                    _homeSynth.SpeakAsyncCancelAll();
+                    _homeSynth.SpeakAsync(
+                        $"Identity confirmed. Welcome, {user.Name}. " +
+                        $"Loading {MapDisplayedLevel(user.Level)} Padel modules.");
+                }
+            }
+            catch { }
+
+            // Navigate after a short delay so the player sees the greeting
+            var navTimer = new System.Windows.Forms.Timer { Interval = 2800 };
+            navTimer.Tick += (s2, e2) =>
+            {
+                navTimer.Stop();
+                navTimer.Dispose();
+                HideFaceScanHUD();
+
+                if (pageOpen) return;
+                pageOpen = true;
+                currentUser = user;
+
+                Form page = new LearningPage(user, client);
+                page.FormClosed += (s3, e3) =>
+                {
+                    pageOpen = false;
+                    currentUser = null;
+                    _faceLoginCompleted = false;
+                    lblInstruction.Text = "Waiting to detect your player level automatically...";
+                    lblFooter.Text = "Scanning for player...";
+                    this.Show();
+                    // Restart face scan window (5 s), then Bluetooth fallback
+                    StartFaceScanWindow();
+                };
+
+                page.Show();
+                this.Hide();
+            };
+            navTimer.Start();
+        }));
     }
 }
 
