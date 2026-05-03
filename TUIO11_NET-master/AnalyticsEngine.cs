@@ -29,6 +29,7 @@ public class AnalyticsEngine
 
     // ── Session data ──
     private readonly List<GazePoint> _rawPoints = new List<GazePoint>();
+    private readonly object _pointsLock = new object();
     private readonly List<Fixation> _fixations = new List<Fixation>();
     private readonly Dictionary<string, float> _timeOnTarget = new Dictionary<string, float>();
     private DateTime _sessionStart;
@@ -72,7 +73,10 @@ public class AnalyticsEngine
     public void AddGazePoint(float x, float y)
     {
         if (!_isActive) return;
-        _rawPoints.Add(new GazePoint { X = x, Y = y, Timestamp = DateTime.Now });
+        lock (_pointsLock)
+        {
+            _rawPoints.Add(new GazePoint { X = x, Y = y, Timestamp = DateTime.Now });
+        }
     }
 
     /// <summary>
@@ -81,7 +85,12 @@ public class AnalyticsEngine
     /// </summary>
     public Dictionary<string, int> ComputeSessionScores()
     {
-        DetectFixations();
+        List<GazePoint> snapshot;
+        lock (_pointsLock)
+        {
+            snapshot = new List<GazePoint>(_rawPoints);
+        }
+        DetectFixations(snapshot);
         MapFixationsToRegions();
         return CalculateAttentionScores();
     }
@@ -104,7 +113,7 @@ public class AnalyticsEngine
         gp.Spelling_Score    = WeightedAvg(gp.Spelling_Score,    sessionScores.ContainsKey("Spelling") ? sessionScores["Spelling"] : 50);
         gp.Competition_Score = WeightedAvg(gp.Competition_Score, sessionScores.ContainsKey("Competition") ? sessionScores["Competition"] : 50);
 
-        PersistUsers();
+        PersistUsers(user);
     }
 
     /// <summary>
@@ -149,33 +158,33 @@ public class AnalyticsEngine
 
     // ── Internal logic ──
 
-    private void DetectFixations()
+    private void DetectFixations(List<GazePoint> points)
     {
         _fixations.Clear();
-        if (_rawPoints.Count < 2) return;
+        if (points.Count < 2) return;
 
         int i = 0;
-        while (i < _rawPoints.Count)
+        while (i < points.Count)
         {
-            float sumX = _rawPoints[i].X, sumY = _rawPoints[i].Y;
+            float sumX = points[i].X, sumY = points[i].Y;
             int count = 1;
             int j = i + 1;
 
-            while (j < _rawPoints.Count)
+            while (j < points.Count)
             {
                 float cx = sumX / count, cy = sumY / count;
-                float dx = _rawPoints[j].X - cx, dy = _rawPoints[j].Y - cy;
+                float dx = points[j].X - cx, dy = points[j].Y - cy;
                 float dist = (float)Math.Sqrt(dx * dx + dy * dy);
 
                 if (dist > FIXATION_RADIUS) break;
-                sumX += _rawPoints[j].X;
-                sumY += _rawPoints[j].Y;
+                sumX += points[j].X;
+                sumY += points[j].Y;
                 count++;
                 j++;
             }
 
-            float durationMs = (float)(_rawPoints[Math.Min(j - 1, _rawPoints.Count - 1)].Timestamp
-                                - _rawPoints[i].Timestamp).TotalMilliseconds;
+            float durationMs = (float)(points[Math.Min(j - 1, points.Count - 1)].Timestamp
+                                - points[i].Timestamp).TotalMilliseconds;
 
             if (durationMs >= FIXATION_MIN_MS)
             {
@@ -233,16 +242,28 @@ public class AnalyticsEngine
         return (int)(oldScore * 0.7 + sessionScore * 0.3);
     }
 
-    private static void PersistUsers()
+    private static void PersistUsers(TuioDemo.UserData updatedUser)
     {
         try
         {
             string path = System.IO.Path.Combine(System.Windows.Forms.Application.StartupPath, "Data", "users.json");
             if (!File.Exists(path)) return;
             string json = File.ReadAllText(path);
-            var users = JsonConvert.DeserializeObject<List<TuioDemo.UserData>>(json);
+            var users = JsonConvert.DeserializeObject<List<TuioDemo.UserData>>(json) ?? new List<TuioDemo.UserData>();
+
+            // Find and update the matching user in the list
+            for (int i = 0; i < users.Count; i++)
+            {
+                if (string.Equals(users[i].Name, updatedUser.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    users[i].GazeProfile = updatedUser.GazeProfile;
+                    break;
+                }
+            }
+
             string output = JsonConvert.SerializeObject(users, Formatting.Indented);
             File.WriteAllText(path, output);
+            Console.WriteLine($"[AnalyticsEngine] Saved GazeProfile for {updatedUser.Name}");
         }
         catch (Exception ex)
         {

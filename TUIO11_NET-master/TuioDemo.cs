@@ -3167,16 +3167,14 @@ public class LearningPage : Form, TuioListener
         var weakCats = AnalyticsEngine.GetWeakCategories(gp, 40);
         if (weakCats.Count == 0) return;
 
-        // Map category names to card controls
-        var cardMap = new Dictionary<string, RoundedShadowPanel>
-        {
-            { "Strokes", cardVocabulary },
-            { "Rules", cardGrammar },
-            { "Practice", cardArranging },
-            { "Quiz", cardQuiz },
-            { "Spelling", cardSpelling },
-            { "Competition", cardCompetition }
-        };
+        // Map category names to card controls (skip nulls)
+        var cardMap = new Dictionary<string, RoundedShadowPanel>();
+        if (cardVocabulary != null) cardMap["Strokes"] = cardVocabulary;
+        if (cardGrammar != null)    cardMap["Rules"] = cardGrammar;
+        if (cardArranging != null)  cardMap["Practice"] = cardArranging;
+        if (cardQuiz != null)       cardMap["Quiz"] = cardQuiz;
+        if (cardSpelling != null)   cardMap["Spelling"] = cardSpelling;
+        if (cardCompetition != null) cardMap["Competition"] = cardCompetition;
 
         // Apply Focus Glow to weak-score cards
         _glowCards.Clear();
