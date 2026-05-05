@@ -1,38 +1,38 @@
 [
   {
-    "Word": "APPLE",
-    "Meaning": "A red fruit",
-    "Example": "This is an apple.",
-    "ImageName": "apple.png"
+    "Word": "SERVE",
+    "Meaning": "Starting shot in padel",
+    "Example": "Coach Tip: Serve must bounce in the diagonal box.",
+    "ImageName": "serve.png"
   },
   {
-    "Word": "BANANA",
-    "Meaning": "A yellow fruit",
-    "Example": "I like bananas.",
-    "ImageName": "banana.png"
+    "Word": "FOREHAND",
+    "Meaning": "Basic attacking shot from the dominant side",
+    "Example": "Coach Tip: Use your forehand to control direction and power.",
+    "ImageName": "forehand.png"
   },
   {
-    "Word": "BALL",
-    "Meaning": "A round toy",
-    "Example": "The ball is red.",
-    "ImageName": "ball.png"
+    "Word": "BACKHAND",
+    "Meaning": "Shot played from the opposite side of the body",
+    "Example": "Coach Tip: Keep your body balanced on the backhand.",
+    "ImageName": "backhand.png"
   },
   {
-    "Word": "CAT",
-    "Meaning": "A small animal",
-    "Example": "The cat is cute.",
-    "ImageName": "cat.png"
+    "Word": "VOLLEY",
+    "Meaning": "Shot played before the ball bounces",
+    "Example": "Coach Tip: Stay close to the net and keep the racket stable.",
+    "ImageName": "volley.png"
   },
   {
-    "Word": "DOG",
-    "Meaning": "A friendly animal",
-    "Example": "The dog can run.",
-    "ImageName": "dog.png"
+    "Word": "COURT ZONES",
+    "Meaning": "Learn the main zones of the court",
+    "Example": "Coach Tip: Good positioning improves your next shot.",
+    "ImageName": "court_zones.png"
   },
   {
-    "Word": "CAR",
-    "Meaning": "A road vehicle",
-    "Example": "This is my car.",
-    "ImageName": "car.png"
+    "Word": "SCORING",
+    "Meaning": "Basic point system in padel",
+    "Example": "Coach Tip: Learn how points move from 15 to game.",
+    "ImageName": "scoring.png"
   }
 ]

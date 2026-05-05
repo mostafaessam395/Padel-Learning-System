@@ -797,7 +797,9 @@ public class HomePage : Form, TuioListener
     {
         try
         {
-            string path = Path.Combine(Application.StartupPath, "2.png");
+            string path = Path.Combine(Application.StartupPath, "Data", "2.png");
+            if (!File.Exists(path))
+                path = Path.Combine(Application.StartupPath, "2.png");
             if (File.Exists(path))
             {
                 using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read))
@@ -1751,7 +1753,7 @@ public class HomePage : Form, TuioListener
                         _homeSynth.SpeakAsyncCancelAll();
                         _homeSynth.SpeakAsync(
                             $"Identity confirmed. Welcome, {user.Name}. " +
-                            $"Loading {MapDisplayedLevel(user.Level)} Padel modules.");
+                            $"Loading {MapDisplayedLevel(user.Level)} Padel training modules.");
                     }
                 }
                 catch { }
@@ -2225,7 +2227,7 @@ public class LearningPage : Form, TuioListener
         cardCompetition.Size = new Size(340, 210);
 
         lblFooter = new Label();
-        lblFooter.Text = "Touch your marker to start beginner training!";
+        lblFooter.Text = "Touch your marker to start padel training!";
         lblFooter.Font = new Font("Arial", 15, FontStyle.Bold);
         lblFooter.ForeColor = Color.FromArgb(54, 92, 135);
         lblFooter.AutoSize = false;
@@ -3038,11 +3040,11 @@ public class LearningPage : Form, TuioListener
             Form page = null;
 
             if (o.SymbolID == 3)
-                page = new LessonPage(level + " Vocabulary", client, 6);
+                page = new LessonPage(LessonPage.MapLevel(level) + " Padel Shots", client, 6);
             else if (o.SymbolID == 4)
-                page = new LessonPage(level + " Grammar", client, 7);
+                page = new LessonPage(LessonPage.MapLevel(level) + " Padel Rules", client, 7);
             else if (o.SymbolID == 5)
-                page = new LessonPage(level + " Arranging", client, 8);
+                page = new LessonPage(LessonPage.MapLevel(level) + " Padel Rule Builder", client, 8);
             else if (o.SymbolID == 6)
                 page = new QuizPage(level, client);
             else if (o.SymbolID == 7)
@@ -3218,7 +3220,7 @@ public class LearningPage : Form, TuioListener
             {
                 _learningSynth.SpeakAsync(
                     $"Welcome back! I noticed you skipped {weakName} last time. " +
-                    $"Let's focus on it today to master your game.");
+                    $"Let's focus on it today to improve your padel skills.");
             }
             catch { }
         }
@@ -3261,11 +3263,11 @@ public class LearningPage : Form, TuioListener
 
             Form page = null;
             if (markerId == 3)
-                page = new LessonPage(level + " Vocabulary", client, 6);
+                page = new LessonPage(LessonPage.MapLevel(level) + " Padel Shots", client, 6);
             else if (markerId == 4)
-                page = new LessonPage(level + " Grammar", client, 7);
+                page = new LessonPage(LessonPage.MapLevel(level) + " Padel Rules", client, 7);
             else if (markerId == 5)
-                page = new LessonPage(level + " Arranging", client, 8);
+                page = new LessonPage(LessonPage.MapLevel(level) + " Padel Rule Builder", client, 8);
             else if (markerId == 6)
                 page = new QuizPage(level, client);
             else if (markerId == 7)
@@ -3389,7 +3391,6 @@ public class LessonPage : Form, TuioListener
                  ControlStyles.ResizeRedraw, true);
 
         BuildData();
-        var words = LoadWordsFromJson("primary_vocabulary.json");
         PreloadLessonImages();
         BuildUI(title);
 
@@ -3438,13 +3439,25 @@ public class LessonPage : Form, TuioListener
 
     private bool IsArrangementLesson()
     {
-        return lessonTitle.ToLower().Contains("arranging");
+        return lessonTitle.ToLower().Contains("arranging") || lessonTitle.ToLower().Contains("rule builder");
+    }
+
+    // Maps raw level string to a clean display name
+    internal static string MapLevel(string rawLevel)
+    {
+        if (rawLevel == null) return "Beginner";
+        string l = rawLevel.Trim();
+        if (l.Equals("Primary", StringComparison.OrdinalIgnoreCase)) return "Beginner";
+        if (l.Equals("Secondary", StringComparison.OrdinalIgnoreCase)) return "Intermediate";
+        if (l.Equals("HighSchool", StringComparison.OrdinalIgnoreCase) ||
+            l.Equals("High School", StringComparison.OrdinalIgnoreCase)) return "Advanced";
+        return l; // already a display name
     }
 
     private void BuildData()
     {
-        bool isPrimary = lessonTitle.ToLower().Contains("primary");
-        bool isSecondary = lessonTitle.ToLower().Contains("secondary");
+        bool isPrimary = lessonTitle.ToLower().Contains("primary") || lessonTitle.ToLower().Contains("beginner");
+        bool isSecondary = lessonTitle.ToLower().Contains("secondary") || lessonTitle.ToLower().Contains("intermediate");
 
         if (isPrimary)
         {
@@ -3455,28 +3468,28 @@ public class LessonPage : Form, TuioListener
                 .ToArray();
             grammarItems = new WordItem[]
             {
-                new WordItem("IS",  "Used with one subject",   "This is a book.",         "is.png"),
-                new WordItem("ARE", "Used with plural subjects","They are students.",      "are.png"),
-                new WordItem("HE",  "Pronoun for a boy",        "He is my brother.",       "he.png"),
-                new WordItem("SHE", "Pronoun for a girl",       "She is my friend.",       "she.png")
+                new WordItem("SERVE RULE",  "Ball must bounce in diagonal box",   "Serve must land in opposite service box.",         "serve.png"),
+                new WordItem("NET RULE", "Ball cannot touch net on serve","If serve hits net, it's a fault.",      "net_rules.png"),
+                new WordItem("SCORING",  "Points: 15, 30, 40, game",        "Padel uses tennis scoring system.",       "scoring.png"),
+                new WordItem("COURT ZONES", "Front, mid, back court areas",       "Position yourself in the right zone.",       "court_zones.png")
             };
             arrangingSentenceItems = new ArrangeItem[]
             {
-                new ArrangeItem(new string[]{"I","AM","HAPPY"},
-                    "I am happy.",
-                    "Start with the subject, then verb, then feeling."),
-                new ArrangeItem(new string[]{"THIS","IS","A","CAT"},
-                    "This is a cat.",
-                    "Use 'This is' then the noun."),
-                new ArrangeItem(new string[]{"THE","BALL","IS","RED"},
-                    "The ball is red.",
-                    "Name the object first, then its color."),
-                new ArrangeItem(new string[]{"THE","DOG","CAN","RUN","FAST"},
-                    "The dog can run fast.",
-                    "Use 'can' between subject and the action verb."),
-                new ArrangeItem(new string[]{"I","LIKE","TO","EAT","BANANAS"},
-                    "I like to eat bananas.",
-                    "Subject + like + to + verb + object.")
+                new ArrangeItem(new string[]{"SERVE","MUST","BOUNCE","IN","DIAGONAL","BOX"},
+                    "Serve must bounce in diagonal box.",
+                    "Start with serve, then the rule requirement."),
+                new ArrangeItem(new string[]{"HIT","THE","BALL","BEFORE","SECOND","BOUNCE"},
+                    "Hit the ball before second bounce.",
+                    "Action first, then the timing condition."),
+                new ArrangeItem(new string[]{"VOLLEY","AT","THE","NET","IS","EFFECTIVE"},
+                    "Volley at the net is effective.",
+                    "Shot type, location, then result."),
+                new ArrangeItem(new string[]{"PLAYER","MUST","STAY","BEHIND","SERVICE","LINE"},
+                    "Player must stay behind service line.",
+                    "Player, obligation, then position rule."),
+                new ArrangeItem(new string[]{"BALL","CAN","HIT","THE","WALL","ONCE"},
+                    "Ball can hit the wall once.",
+                    "Ball + permission + action + limit.")
             };
         }
         else if (isSecondary)
@@ -3488,28 +3501,28 @@ public class LessonPage : Form, TuioListener
                 .ToArray();
             grammarItems = new WordItem[]
             {
-                new WordItem("PAST TENSE",   "Add -ed to show past action",       "She walked to school yesterday.",   ""),
-                new WordItem("CONTINUOUS",   "Use 'is/are + verb-ing' for now",   "He is studying for the exam.",      ""),
-                new WordItem("COMPARATIVE",  "Use -er or 'more' to compare",      "This book is more interesting.",    ""),
-                new WordItem("MODAL VERBS",  "Should, must, can show obligation", "You should review your notes.",     "")
+                new WordItem("DOUBLE BOUNCE",   "Ball bounces twice before return",       "Double bounce means you lose the point.",   "double_bounce.png"),
+                new WordItem("FOOT FAULT",   "Stepping over line during serve",   "Avoid foot fault when serving.",      "foot_fault.png"),
+                new WordItem("WALL USAGE",  "Using walls strategically",      "Use wall rebound to your advantage.",    "wall_usage.png"),
+                new WordItem("CHANGE COURT",  "Switch sides during match", "Change court after odd games.",     "change_court.png")
             };
             arrangingSentenceItems = new ArrangeItem[]
             {
-                new ArrangeItem(new string[]{"SHE","WAS","READING","WHEN","HE","CALLED"},
-                    "She was reading when he called.",
-                    "Past continuous + 'when' + simple past."),
-                new ArrangeItem(new string[]{"THEY","HAD","FINISHED","BEFORE","WE","ARRIVED"},
-                    "They had finished before we arrived.",
-                    "Use past perfect for the earlier completed action."),
-                new ArrangeItem(new string[]{"THE","ENVIRONMENT","MUST","BE","PROTECTED"},
-                    "The environment must be protected.",
-                    "Modal verb + passive voice: must + be + past participle."),
-                new ArrangeItem(new string[]{"A","CURIOUS","STUDENT","LEARNS","MORE","EFFICIENTLY"},
-                    "A curious student learns more efficiently.",
-                    "Adjective before the noun; 'more' makes the comparative adverb."),
-                new ArrangeItem(new string[]{"THE","ANCIENT","RUINS","WERE","DISCOVERED","RECENTLY"},
-                    "The ancient ruins were discovered recently.",
-                    "Past passive voice: were + past participle, adverb at the end.")
+                new ArrangeItem(new string[]{"BALL","MUST","NOT","TOUCH","NET","ON","SERVE"},
+                    "Ball must not touch net on serve.",
+                    "Rule statement: main element + prohibition + condition."),
+                new ArrangeItem(new string[]{"PLAYERS","CHANGE","COURT","AFTER","ODD","GAMES"},
+                    "Players change court after odd games.",
+                    "Players + action + timing condition."),
+                new ArrangeItem(new string[]{"WALL","REBOUND","CAN","BE","USED","STRATEGICALLY"},
+                    "Wall rebound can be used strategically.",
+                    "Feature + permission + usage method."),
+                new ArrangeItem(new string[]{"DEJADA","IS","EFFECTIVE","WHEN","OPPONENT","IS","BACK"},
+                    "Dejada is effective when opponent is back.",
+                    "Shot type + effectiveness + tactical condition."),
+                new ArrangeItem(new string[]{"DOUBLE","BOUNCE","MEANS","POINT","IS","LOST"},
+                    "Double bounce means point is lost.",
+                    "Violation + consequence: clear cause and effect.")
             };
         }
         else // High School
@@ -3521,28 +3534,28 @@ public class LessonPage : Form, TuioListener
                 .ToArray();
             grammarItems = new WordItem[]
             {
-                new WordItem("PASSIVE VOICE",    "Subject receives the action",         "The report was written by the editor.",   ""),
-                new WordItem("REL. CLAUSE",      "Adds info using who/which/that",      "The theory, which was new, surprised all.",""),
-                new WordItem("CONDITIONAL",      "If/unless express conditions",        "Had she studied, she would have passed.", ""),
-                new WordItem("SUBJUNCTIVE",      "Expresses wishes and hypotheticals",  "It is vital that he be present today.",   "")
+                new WordItem("GOLDEN POINT",    "Deciding point played at deuce",         "At golden point, receiving team chooses side.",   "golden_point.png"),
+                new WordItem("LET RULE",      "Serve interference requires replay",      "If ball hits net and lands in, it's a let.","net_rules.png"),
+                new WordItem("TIME VIOLATION",      "Limited time between points",        "Players have 25 seconds between points.", "time_violation.png"),
+                new WordItem("DOUBLE WALL",      "Ball hits two walls before return",  "Double wall shots require quick reflexes.",   "double_wall.png")
             };
             arrangingSentenceItems = new ArrangeItem[]
             {
-                new ArrangeItem(new string[]{"DESPITE","THE","RAIN","THEY","CONTINUED"},
-                    "Despite the rain, they continued.",
-                    "Concessive phrase at the start signals contrast."),
-                new ArrangeItem(new string[]{"THE","RESULTS","WHICH","WERE","SURPRISING","CHANGED","EVERYTHING"},
-                    "The results, which were surprising, changed everything.",
-                    "Non-defining relative clause sits between two commas."),
-                new ArrangeItem(new string[]{"HAD","SHE","KNOWN","SHE","WOULD","HAVE","ACTED","DIFFERENTLY"},
-                    "Had she known, she would have acted differently.",
-                    "Inverted third conditional: omit 'if', invert subject and auxiliary."),
-                new ArrangeItem(new string[]{"THE","HYPOTHESIS","WAS","PROVEN","BY","EMPIRICAL","EVIDENCE"},
-                    "The hypothesis was proven by empirical evidence.",
-                    "Passive voice: was + past participle + 'by' + agent."),
-                new ArrangeItem(new string[]{"AN","ELOQUENT","SPEAKER","PERSUADES","WITHOUT","AMBIGUITY"},
-                    "An eloquent speaker persuades without ambiguity.",
-                    "Adjective precedes the noun; prepositional phrase adds detail.")
+                new ArrangeItem(new string[]{"GOLDEN","POINT","DECIDES","THE","GAME","AT","DEUCE"},
+                    "Golden point decides the game at deuce.",
+                    "Special rule: main action + timing + condition."),
+                new ArrangeItem(new string[]{"BANDEJA","KEEPS","BALL","LOW","AFTER","BOUNCE"},
+                    "Bandeja keeps ball low after bounce.",
+                    "Advanced shot: technique + effect + timing."),
+                new ArrangeItem(new string[]{"VIBORA","CREATES","DIFFICULT","ANGLES","FOR","OPPONENT"},
+                    "Vibora creates difficult angles for opponent.",
+                    "Tactical shot: action + result + target."),
+                new ArrangeItem(new string[]{"CHIQUITA","FORCES","OPPONENT","TO","HIT","UP"},
+                    "Chiquita forces opponent to hit up.",
+                    "Strategic shot: compels specific response."),
+                new ArrangeItem(new string[]{"CONTRA","PARED","REQUIRES","QUICK","REFLEXES","AND","TIMING"},
+                    "Contra pared requires quick reflexes and timing.",
+                    "Advanced technique: demands multiple skills.")
             };
         }
     }
@@ -3565,7 +3578,10 @@ public class LessonPage : Form, TuioListener
 
         try
         {
-            string imagePath = Path.Combine(Application.StartupPath, imageName);
+            // Try Data subfolder first, then startup path directly
+            string imagePath = Path.Combine(Application.StartupPath, "Data", imageName);
+            if (!File.Exists(imagePath))
+                imagePath = Path.Combine(Application.StartupPath, imageName);
             if (!File.Exists(imagePath)) return;
 
             using (FileStream fs = new FileStream(imagePath, FileMode.Open, FileAccess.Read))
@@ -3630,7 +3646,7 @@ public class LessonPage : Form, TuioListener
         picWord.BackColor = Color.Transparent;
 
         lblWord = new Label();
-        lblWord.Text = "APPLE";
+        lblWord.Text = "SERVE";
         lblWord.Font = new Font("Arial", 34, FontStyle.Bold);
         lblWord.ForeColor = Color.FromArgb(35, 60, 95);
         lblWord.AutoSize = false;
@@ -3639,7 +3655,7 @@ public class LessonPage : Form, TuioListener
         lblWord.BackColor = Color.Transparent;
 
         lblMeaning = new Label();
-        lblMeaning.Text = "A red fruit";
+        lblMeaning.Text = "Starting shot in padel";
         lblMeaning.Font = new Font("Arial", 18, FontStyle.Regular);
         lblMeaning.ForeColor = Color.FromArgb(90, 110, 125);
         lblMeaning.AutoSize = false;
@@ -3651,7 +3667,7 @@ public class LessonPage : Form, TuioListener
         examplePanel.Size = new Size(720, 78);
 
         lblExample = new Label();
-        lblExample.Text = "Example: This is an apple.";
+        lblExample.Text = "Coach Tip: Serve must bounce in diagonal box.";
         lblExample.Font = new Font("Arial", 16, FontStyle.Bold);
         lblExample.ForeColor = Color.FromArgb(55, 90, 125);
         lblExample.AutoSize = false;
@@ -3662,7 +3678,7 @@ public class LessonPage : Form, TuioListener
         examplePanel.Controls.Add(lblExample);
 
         lblTip = new Label();
-        lblTip.Text = "Look at the image, read the word, then say the example aloud.";
+        lblTip.Text = "Look at the image, read the padel term, then follow the coach instruction.";
         lblTip.Font = new Font("Arial", 12, FontStyle.Italic);
         lblTip.ForeColor = Color.FromArgb(110, 120, 130);
         lblTip.AutoSize = false;
@@ -3682,7 +3698,7 @@ public class LessonPage : Form, TuioListener
         instructionPanel.Size = new Size(720, 74);
 
         lblInstruction = new Label();
-        lblInstruction.Text = "Rotate marker " + controlMarkerId + " slowly to change the word";
+        lblInstruction.Text = "Rotate marker " + controlMarkerId + " slowly to change the padel term";
         lblInstruction.Font = new Font("Arial", 14, FontStyle.Bold);
         lblInstruction.ForeColor = Color.FromArgb(55, 90, 125);
         lblInstruction.AutoSize = false;
@@ -3712,7 +3728,7 @@ public class LessonPage : Form, TuioListener
         lblHeader.BackColor = Color.Transparent;
 
         Label lblSubHeader = new Label();
-        lblSubHeader.Text = "Build the sentence using colorful word tiles";
+        lblSubHeader.Text = "Build the correct padel rule using the tiles";
         lblSubHeader.Font = new Font("Arial", 13, FontStyle.Italic);
         lblSubHeader.ForeColor = Color.FromArgb(82, 115, 90);
         lblSubHeader.AutoSize = false;
@@ -3746,7 +3762,7 @@ public class LessonPage : Form, TuioListener
         counterPanel.Controls.Add(lblCounter);
 
         lblArrangeBadge = new Label();
-        lblArrangeBadge.Text = "SENTENCE GAME";
+        lblArrangeBadge.Text = "RULE BUILDER";
         lblArrangeBadge.Font = new Font("Arial", 10, FontStyle.Bold);
         lblArrangeBadge.ForeColor = Color.FromArgb(52, 100, 68);
         lblArrangeBadge.BackColor = Color.FromArgb(228, 246, 233);
@@ -3755,7 +3771,7 @@ public class LessonPage : Form, TuioListener
         lblArrangeBadge.TextAlign = ContentAlignment.MiddleCenter;
 
         lblArrangeTitle = new Label();
-        lblArrangeTitle.Text = "Arrange These Words";
+        lblArrangeTitle.Text = "Arrange Padel Rule Tiles";
         lblArrangeTitle.Font = new Font("Arial", 26, FontStyle.Bold);
         lblArrangeTitle.ForeColor = Color.FromArgb(34, 70, 48);
         lblArrangeTitle.AutoSize = false;
@@ -3775,7 +3791,7 @@ public class LessonPage : Form, TuioListener
         progressPanel.Size = new Size(250, 74);
 
         lblProgress = new Label();
-        lblProgress.Text = "Sentence Builder";
+        lblProgress.Text = "Padel Rule Builder";
         lblProgress.Font = new Font("Arial", 12, FontStyle.Bold);
         lblProgress.ForeColor = Color.FromArgb(60, 95, 130);
         lblProgress.AutoSize = false;
@@ -3789,7 +3805,7 @@ public class LessonPage : Form, TuioListener
         correctSentencePanel.Size = new Size(790, 110);
 
         lblCorrectSentenceTitle = new Label();
-        lblCorrectSentenceTitle.Text = "Correct Sentence";
+        lblCorrectSentenceTitle.Text = "Correct Padel Rule";
         lblCorrectSentenceTitle.Font = new Font("Arial", 12, FontStyle.Bold);
         lblCorrectSentenceTitle.ForeColor = Color.FromArgb(56, 105, 72);
         lblCorrectSentenceTitle.AutoSize = false;
@@ -3798,7 +3814,7 @@ public class LessonPage : Form, TuioListener
         lblCorrectSentenceTitle.BackColor = Color.Transparent;
 
         lblCorrectSentence = new Label();
-        lblCorrectSentence.Text = "I am happy.";
+        lblCorrectSentence.Text = "Serve must bounce in diagonal box.";
         lblCorrectSentence.Font = new Font("Arial", 21, FontStyle.Bold);
         lblCorrectSentence.ForeColor = Color.FromArgb(30, 65, 45);
         lblCorrectSentence.AutoSize = false;
@@ -3813,7 +3829,7 @@ public class LessonPage : Form, TuioListener
         hintPanel.Size = new Size(790, 92);
 
         lblArrangeHintTitle = new Label();
-        lblArrangeHintTitle.Text = "Hint";
+        lblArrangeHintTitle.Text = "Coach Hint";
         lblArrangeHintTitle.Font = new Font("Arial", 12, FontStyle.Bold);
         lblArrangeHintTitle.ForeColor = Color.FromArgb(150, 100, 30);
         lblArrangeHintTitle.AutoSize = false;
@@ -3822,7 +3838,7 @@ public class LessonPage : Form, TuioListener
         lblArrangeHintTitle.BackColor = Color.Transparent;
 
         lblArrangeHint = new Label();
-        lblArrangeHint.Text = "Start with the subject.";
+        lblArrangeHint.Text = "Start with the main action.";
         lblArrangeHint.Font = new Font("Arial", 14, FontStyle.Regular);
         lblArrangeHint.ForeColor = Color.FromArgb(120, 92, 40);
         lblArrangeHint.AutoSize = false;
@@ -3837,7 +3853,7 @@ public class LessonPage : Form, TuioListener
         instructionPanel.Size = new Size(860, 86);
 
         lblInstruction = new Label();
-        lblInstruction.Text = "Rotate marker " + controlMarkerId + " to move between sentence cards";
+        lblInstruction.Text = "Rotate marker " + controlMarkerId + " to move between padel rule cards";
         lblInstruction.Font = new Font("Arial", 14, FontStyle.Bold);
         lblInstruction.ForeColor = Color.FromArgb(45, 85, 125);
         lblInstruction.AutoSize = false;
@@ -3867,10 +3883,10 @@ public class LessonPage : Form, TuioListener
     {
         string lower = lessonTitle.ToLower();
 
-        if (lower.Contains("vocabulary"))
+        if (lower.Contains("vocabulary") || lower.Contains("shots") || lower.Contains("shot"))
             return Color.FromArgb(245, 159, 77);
 
-        if (lower.Contains("grammar"))
+        if (lower.Contains("grammar") || lower.Contains("rules") || lower.Contains("rule"))
             return Color.FromArgb(88, 150, 255);
 
         return Color.FromArgb(96, 182, 120);
@@ -3880,10 +3896,10 @@ public class LessonPage : Form, TuioListener
     {
         string lower = lessonTitle.ToLower();
 
-        if (lower.Contains("vocabulary"))
+        if (lower.Contains("vocabulary") || lower.Contains("shots") || lower.Contains("shot"))
             return vocabularyItems;
 
-        if (lower.Contains("grammar"))
+        if (lower.Contains("grammar") || lower.Contains("rules") || lower.Contains("rule"))
             return grammarItems;
 
         return null;
@@ -4525,7 +4541,7 @@ public class QuizPage : Form, TuioListener
         levelName = level;
         vocab = GetVocab(level);
 
-        this.Text = "Quiz";
+        this.Text = "Padel Quiz";
         this.WindowState = FormWindowState.Maximized;
         this.BackColor = Color.FromArgb(240, 248, 255);
         this.DoubleBuffered = true;
@@ -4544,7 +4560,7 @@ public class QuizPage : Form, TuioListener
 
         BuildUI();
         client.addTuioListener(this);
-        NavHelper.AddNavBar(this, level + " Quiz", false);
+        NavHelper.AddNavBar(this, "Padel Quiz", false);
 
         this.KeyPreview = true;
         this.KeyDown += (s, e) =>
@@ -4566,7 +4582,7 @@ public class QuizPage : Form, TuioListener
     {
         lblProgress = MakeLabel("Question 1 / 6", 15, FontStyle.Bold, Color.FromArgb(40, 60, 100));
         lblStars = MakeLabel("Correct: 0 / " + TOTAL_Q, 15, FontStyle.Bold, Color.FromArgb(200, 140, 0));
-        lblQuestion = MakeLabel("What word matches this image?", 17, FontStyle.Regular, Color.FromArgb(50, 75, 115));
+        lblQuestion = MakeLabel("Which padel term matches this image?", 17, FontStyle.Regular, Color.FromArgb(50, 75, 115));
         lblFeedback = MakeLabel("", 22, FontStyle.Bold, Color.Green);
         lblTimerNum = MakeLabel("20", 15, FontStyle.Bold, Color.FromArgb(50, 90, 160));
         timerBg = new Panel { BackColor = Color.FromArgb(210, 225, 245) };
@@ -4681,7 +4697,7 @@ public class QuizPage : Form, TuioListener
             {
                 synth.Rate = AppSettings.VoiceRate;
                 synth.SpeakAsyncCancelAll();
-                synth.SpeakAsync("What word matches this image?");
+                synth.SpeakAsync("What shot matches this image?");
             }
         }
         catch { }
@@ -4785,7 +4801,9 @@ public class QuizPage : Form, TuioListener
         if (string.IsNullOrEmpty(name) || imgCache.ContainsKey(name)) return;
         try
         {
-            string p = System.IO.Path.Combine(Application.StartupPath, name);
+            string p = System.IO.Path.Combine(Application.StartupPath, "Data", name);
+            if (!System.IO.File.Exists(p))
+                p = System.IO.Path.Combine(Application.StartupPath, name);
             if (!System.IO.File.Exists(p)) return;
             using (var fs = new System.IO.FileStream(p, System.IO.FileMode.Open, System.IO.FileAccess.Read))
             using (Image img = Image.FromStream(fs))
@@ -4815,29 +4833,29 @@ public class QuizPage : Form, TuioListener
     {
         if (level.Contains("Primary"))
             return new QWord[] {
-                new QWord{Word="APPLE",   ImageName="apple.png"},
-                new QWord{Word="BANANA",  ImageName="banana.png"},
-                new QWord{Word="BALL",    ImageName="ball.png"},
-                new QWord{Word="CAT",     ImageName="cat.png"},
-                new QWord{Word="DOG",     ImageName="dog.png"},
-                new QWord{Word="CAR",     ImageName="car.png"}
+                new QWord{Word="SERVE",      ImageName="serve.png"},
+                new QWord{Word="FOREHAND",   ImageName="forehand.png"},
+                new QWord{Word="BACKHAND",   ImageName="backhand.png"},
+                new QWord{Word="VOLLEY",     ImageName="volley.png"},
+                new QWord{Word="COURT ZONES",ImageName="court_zones.png"},
+                new QWord{Word="SCORING",    ImageName="scoring.png"}
             };
         if (level.Contains("Secondary"))
             return new QWord[] {
-                new QWord{Word="ENVIRONMENT", ImageName="environment.png"},
-                new QWord{Word="JOURNEY",     ImageName="journey.png"},
-                new QWord{Word="CURIOUS",     ImageName="curious.png"},
-                new QWord{Word="EFFICIENT",   ImageName="efficient.png"},
-                new QWord{Word="ANCIENT",     ImageName="ancient.png"},
-                new QWord{Word="DIVERSE",     ImageName="diverse.png"}
+                new QWord{Word="NET RULE",      ImageName="net_rules.png"},
+                new QWord{Word="DOUBLE BOUNCE", ImageName="double_bounce.png"},
+                new QWord{Word="FOOT FAULT",    ImageName="foot_fault.png"},
+                new QWord{Word="WALL USAGE",    ImageName="wall_usage.png"},
+                new QWord{Word="CHANGE COURT",  ImageName="change_court.png"},
+                new QWord{Word="DEJADA",        ImageName="dejada.png"}
             };
         return new QWord[] {
-            new QWord{Word="PHENOMENON",   ImageName="phenomenon.png"},
-            new QWord{Word="ELOQUENT",     ImageName="eloquent.png"},
-            new QWord{Word="PERSEVERANCE", ImageName="perseverance.png"},
-            new QWord{Word="AMBIGUOUS",    ImageName="ambiguous.png"},
-            new QWord{Word="HYPOTHESIS",   ImageName="hypothesis.png"},
-            new QWord{Word="PARADOX",      ImageName="paradox.png"}
+            new QWord{Word="BANDEJA",       ImageName="bandeja.png"},
+            new QWord{Word="VIBORA",        ImageName="vibora.png"},
+            new QWord{Word="SMASH",         ImageName="smash.png"},
+            new QWord{Word="CORNER SHOT",   ImageName="corner_shot.png"},
+            new QWord{Word="GOLDEN POINT",  ImageName="golden_point.png"},
+            new QWord{Word="CONTRA PARED",  ImageName="contra_pared.png"}
         };
     }
 
@@ -4922,7 +4940,7 @@ public class SpellingPage : Form, TuioListener
         for (int i = 0; i < raw.Length; i++)
             vocab[i] = new QWord { Word = raw[i][0], ImageName = raw[i][1] };
 
-        this.Text = "Spelling";
+        this.Text = "Padel Speed Mode";
         this.WindowState = FormWindowState.Maximized;
         this.BackColor = Color.FromArgb(245, 240, 255);
         this.DoubleBuffered = true;
@@ -4941,7 +4959,7 @@ public class SpellingPage : Form, TuioListener
 
         BuildUI();
         client.addTuioListener(this);
-        NavHelper.AddNavBar(this, level + " Spelling", false);
+        NavHelper.AddNavBar(this, "Padel Speed Mode", false);
 
         this.KeyPreview = true;
         this.KeyDown += (s, e) =>
@@ -4963,7 +4981,7 @@ public class SpellingPage : Form, TuioListener
     {
         lblProgress = MakeLabel("Question 1 / 6", 15, FontStyle.Bold, Color.FromArgb(70, 40, 120));
         lblStars = MakeLabel("Correct: 0 / " + TOTAL_Q, 15, FontStyle.Bold, Color.FromArgb(200, 140, 0));
-        lblQuestion = MakeLabel("Choose the correct spelling:", 17, FontStyle.Regular, Color.FromArgb(70, 40, 120));
+        lblQuestion = MakeLabel("Identify the padel term:", 17, FontStyle.Regular, Color.FromArgb(70, 40, 120));
         lblFeedback = MakeLabel("", 22, FontStyle.Bold, Color.Green);
         lblTimerNum = MakeLabel("20", 15, FontStyle.Bold, Color.FromArgb(100, 60, 180));
         timerBg = new Panel { BackColor = Color.FromArgb(220, 210, 245) };
@@ -5053,7 +5071,7 @@ public class SpellingPage : Form, TuioListener
         for (int i = 0; i < 3; i++)
         { slotLbl[i].Text = letters[i] + "  ·  " + currentOptions[i]; slots[i].FillColor = orig[i]; slots[i].Invalidate(); }
 
-        try { if (synth != null) { synth.SpeakAsyncCancelAll(); synth.SpeakAsync("Choose the correct spelling."); } } catch { }
+        try { if (synth != null) { synth.SpeakAsyncCancelAll(); synth.SpeakAsync("Choose the correct answer."); } } catch { }
         StartTimer();
     }
 
@@ -5134,7 +5152,7 @@ public class SpellingPage : Form, TuioListener
         {
             if (slot >= 0) { slots[slot].FillColor = red; slots[slot].Invalidate(); }
             slots[correctSlot].FillColor = green; slots[correctSlot].Invalidate();
-            lblFeedback.Text = "✗  Correct spelling: " + vocab[qIndex % vocab.Length].Word;
+            lblFeedback.Text = "✗  Correct term: " + vocab[qIndex % vocab.Length].Word;
             lblFeedback.ForeColor = Color.FromArgb(175, 35, 35);
             synth.Rate = AppSettings.VoiceRate;
             try
@@ -5142,7 +5160,7 @@ public class SpellingPage : Form, TuioListener
                 if (synth != null && !AppSettings.IsMuted)
                 {
                     synth.Rate = AppSettings.VoiceRate;
-                    synth.SpeakAsync("The correct spelling is " + vocab[qIndex % vocab.Length].Word);
+                    synth.SpeakAsync("The correct answer is " + vocab[qIndex % vocab.Length].Word);
                 }
             }
             catch { }
@@ -5172,7 +5190,9 @@ public class SpellingPage : Form, TuioListener
         if (string.IsNullOrEmpty(name) || imgCache.ContainsKey(name)) return;
         try
         {
-            string p = System.IO.Path.Combine(Application.StartupPath, name);
+            string p = System.IO.Path.Combine(Application.StartupPath, "Data", name);
+            if (!System.IO.File.Exists(p))
+                p = System.IO.Path.Combine(Application.StartupPath, name);
             if (!System.IO.File.Exists(p)) return;
             Bitmap bmp;
             using (var fs = new System.IO.FileStream(p, System.IO.FileMode.Open, System.IO.FileAccess.Read))

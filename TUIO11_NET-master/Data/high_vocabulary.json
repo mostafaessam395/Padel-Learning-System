@@ -1,38 +1,56 @@
 [
   {
-    "Word": "PHENOMENON",
-    "Meaning": "A remarkable observable fact",
-    "Example": "Climate change is a global phenomenon.",
-    "ImageName": "phenomenon.png"
+    "Word": "BANDEJA",
+    "Meaning": "Controlled overhead shot with spin",
+    "Example": "Coach Tip: Bandeja keeps the ball low after the bounce.",
+    "ImageName": "bandeja.png"
   },
   {
-    "Word": "ELOQUENT",
-    "Meaning": "Fluent and persuasive in speech",
-    "Example": "Her eloquent speech moved the audience.",
-    "ImageName": "eloquent.png"
+    "Word": "VIBORA",
+    "Meaning": "Advanced overhead shot with side spin",
+    "Example": "Coach Tip: Vibora pushes the opponent toward the glass.",
+    "ImageName": "vibora.png"
   },
   {
-    "Word": "PERSEVERANCE",
-    "Meaning": "Continued effort despite hardship",
-    "Example": "Success demands perseverance.",
-    "ImageName": "perseverance.png"
+    "Word": "SMASH",
+    "Meaning": "Powerful overhead finishing shot",
+    "Example": "Coach Tip: Use smash to finish the point when the lob is short.",
+    "ImageName": "smash.png"
   },
   {
-    "Word": "AMBIGUOUS",
-    "Meaning": "Open to more than one interpretation",
-    "Example": "His answer was deliberately ambiguous.",
-    "ImageName": "ambiguous.png"
+    "Word": "CORNER SHOT",
+    "Meaning": "Shot played into or from the corner area",
+    "Example": "Coach Tip: Use angles to make the return difficult.",
+    "ImageName": "corner_shot.png"
   },
   {
-    "Word": "HYPOTHESIS",
-    "Meaning": "A proposed explanation to be tested",
-    "Example": "The hypothesis was proven correct.",
-    "ImageName": "hypothesis.png"
+    "Word": "CHIQUITA",
+    "Meaning": "Soft tactical shot to take control of the net",
+    "Example": "Coach Tip: Use chiquita to force a weak reply.",
+    "ImageName": "chiquita.png"
   },
   {
-    "Word": "PARADOX",
-    "Meaning": "A self-contradicting statement",
-    "Example": "It is a paradox that silence speaks loudly.",
-    "ImageName": "paradox.png"
+    "Word": "CONTRA PARED",
+    "Meaning": "Advanced shot using the back wall",
+    "Example": "Coach Tip: Let the ball rebound and prepare early.",
+    "ImageName": "contra_pared.png"
+  },
+  {
+    "Word": "GOLDEN POINT",
+    "Meaning": "Deciding point played at deuce",
+    "Example": "Coach Tip: At golden point, the receiving team chooses the side.",
+    "ImageName": "golden_point.png"
+  },
+  {
+    "Word": "SMASH DEFENCE",
+    "Meaning": "Defensive response against an overhead attack",
+    "Example": "Coach Tip: Stay ready for the rebound after the smash.",
+    "ImageName": "smash_defence.png"
+  },
+  {
+    "Word": "PARADA",
+    "Meaning": "Defensive or control shot in difficult situations",
+    "Example": "Coach Tip: Use parada to slow the point and recover position.",
+    "ImageName": "parada.png"
   }
 ]

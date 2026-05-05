@@ -1,0 +1,136 @@
+========================================
+PADEL COACH - AUDIO PHRASES LIST
+========================================
+All audio phrases that need recording for the Padel Coaching System.
+These are currently using Text-to-Speech but can be replaced with real audio files.
+
+========================================
+WELCOME & LOGIN PHRASES
+========================================
+1. "Welcome to Padel Coach"
+2. "Identity confirmed. Welcome, [PlayerName]. Loading [Level] Padel training modules."
+3. "Touch your marker to start padel training!"
+4. "Get ready... your padel level is being detected"
+5. "Scanning for player device..."
+6. "Waiting for Bluetooth connection..."
+
+========================================
+LEVEL SELECTION PHRASES
+========================================
+7. "Start beginner padel training"
+8. "Start intermediate padel training"
+9. "Start advanced padel training"
+10. "Welcome back! I noticed you skipped [Activity] last time. Let's focus on it today to improve your padel skills."
+
+========================================
+TRAINING MODULE PHRASES
+========================================
+11. "Learn basic strokes"
+12. "Learn court rules"
+13. "Practice your shots"
+14. "Quick challenge mode"
+15. "Speed mode activated"
+16. "Competition mode starting"
+
+========================================
+QUIZ/CHALLENGE PHRASES
+========================================
+17. "What shot matches this image?"
+18. "Choose the correct answer"
+19. "Correct!"
+20. "Great shot!"
+21. "Good forehand!"
+22. "Nice backhand!"
+23. "Perfect serve!"
+24. "Excellent volley!"
+25. "The correct answer is [Answer]"
+26. "Wrong answer, try again"
+27. "Try the backhand again"
+28. "Watch the wall rebound"
+29. "Correct shot choice"
+30. "Great padel control"
+31. "Move to the correct court zone"
+
+========================================
+COMPETITION MODE PHRASES
+========================================
+32. "Welcome to padel competition mode. Players, place markers thirty to forty nine to join. Host, place marker fifty to start."
+33. "Question [Number]. What shot matches this image?"
+34. "[PlayerName] chose [Answer], which is [correct/incorrect]. They earned [Points] points."
+35. "Current leader is [PlayerName] with [Score] points."
+36. "Need at least [Number] players to start."
+37. "Marker [ID] is already taken! Please use a different marker."
+38. "[PlayerName] joined with marker [ID]!"
+39. "[PlayerName] submitted answer [A/B/C]"
+40. "[PlayerName], please rotate to select an answer first!"
+
+========================================
+SCORING & FEEDBACK PHRASES
+========================================
+41. "Congratulations! You scored [Score] out of [Total]."
+42. "Great job! You scored [Score] out of [Total]."
+43. "Speed mode started"
+44. "Competition mode started"
+45. "Time's up!"
+46. "Final score: [Score] points"
+
+========================================
+SETTINGS & SYSTEM PHRASES
+========================================
+47. "Dark Mode: ON"
+48. "Dark Mode: OFF"
+49. "Sound: MUTED"
+50. "Sound: ON"
+51. "Voice: SLOW"
+52. "Voice: NORMAL"
+53. "Progress Reset!"
+54. "App Info displayed"
+
+========================================
+SHOT INSTRUCTIONS (ADVANCED)
+========================================
+55. "Serve - Starting shot in padel"
+56. "Forehand - Shot with palm facing forward"
+57. "Backhand - Shot with back of hand forward"
+58. "Volley - Hit before ball bounces"
+59. "Bandeja - Overhead shot with topspin"
+60. "Vibora - Aggressive overhead with sidespin"
+61. "Smash - Powerful overhead winning shot"
+62. "Chiquita - Low shot at opponent's feet"
+63. "Dejada - Soft drop shot near net"
+64. "Contra pared - Shot after ball hits back wall"
+
+========================================
+COURT RULES INSTRUCTIONS
+========================================
+65. "Net Rule - Ball must not touch net on serve"
+66. "Double Bounce - Ball bounces twice before return"
+67. "Foot Fault - Stepping over line during serve"
+68. "Wall Rebound - Ball bounces off the wall"
+69. "Golden Point - Deciding point at deuce"
+70. "Court Zones - Different areas of the padel court"
+
+========================================
+NOTES FOR AUDIO RECORDING
+========================================
+- All phrases should be recorded in a clear, encouraging coaching voice
+- Use a friendly, supportive tone
+- Maintain consistent volume and quality across all recordings
+- Record in a quiet environment without background noise
+- Save as WAV or MP3 format
+- Naming convention: phrase_001.wav, phrase_002.wav, etc.
+- Place audio files in: TUIO11_NET-master/Audio/ folder
+
+========================================
+CURRENT STATUS
+========================================
+✓ Text-to-Speech is working for all phrases
+✓ Audio system supports both TTS and audio files
+⚠ Real audio recordings not yet created
+⚠ Audio folder not yet created
+
+To add real audio:
+1. Record all phrases above
+2. Create Audio folder in project root
+3. Update code to load audio files instead of TTS
+4. Test each audio file in the application

@@ -188,7 +188,7 @@ public class CompetitionMode : Form, TuioListener
         LoadQuestions();
 
         _client.addTuioListener(this);
-        NavHelper.AddNavBar(this, level + " Competition", true);
+        NavHelper.AddNavBar(this, "Padel Competition", true);
 
         _ = StartCompetitionAsync();
     }
@@ -526,7 +526,9 @@ public class CompetitionMode : Form, TuioListener
 
         try
         {
-            string path = Path.Combine(Application.StartupPath, name);
+            string path = Path.Combine(Application.StartupPath, "Data", name);
+            if (!File.Exists(path))
+                path = Path.Combine(Application.StartupPath, name);
             if (!File.Exists(path)) return;
 
             using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read))
@@ -541,7 +543,7 @@ public class CompetitionMode : Form, TuioListener
         try
         {
             if (_synth != null && !AppSettings.IsMuted)
-                _ = SpeakAndWait("Welcome to competition mode. Players, place markers thirty to forty nine to join. Host, place marker fifty to start.");
+                _ = SpeakAndWait("Welcome to padel competition mode. Players, place markers thirty to forty nine to join. Host, place marker fifty to start.");
 
             await HostingPhaseAsync();
 
@@ -906,7 +908,7 @@ public class CompetitionMode : Form, TuioListener
         if (_synth == null || _isClosing) return;
 
         _speechCompletion = new TaskCompletionSource<bool>();
-        _synth.SpeakAsync($"Question {questionIndex + 1}. What word matches this image?");
+        _synth.SpeakAsync($"Question {questionIndex + 1}. What shot matches this image?");
         await _speechCompletion.Task;
         await Task.Delay(500);
     }

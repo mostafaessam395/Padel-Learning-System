@@ -1,38 +1,50 @@
 [
   {
-    "Word": "ENVIRONMENT",
-    "Meaning": "Natural surroundings",
-    "Example": "We must protect the environment.",
-    "ImageName": "environment.png"
+    "Word": "NET RULE",
+    "Meaning": "The ball must legally cross the net",
+    "Example": "Coach Tip: A legal serve must clear the net into the service box.",
+    "ImageName": "net_rules.png"
   },
   {
-    "Word": "JOURNEY",
-    "Meaning": "A long trip or experience",
-    "Example": "Learning is a lifelong journey.",
-    "ImageName": "journey.png"
+    "Word": "DOUBLE BOUNCE",
+    "Meaning": "The ball cannot bounce twice before return",
+    "Example": "Coach Tip: If it bounces twice, the point is lost.",
+    "ImageName": "double_bounce.png"
   },
   {
-    "Word": "CURIOUS",
-    "Meaning": "Eager to know or learn",
-    "Example": "She was curious about the result.",
-    "ImageName": "curious.png"
+    "Word": "FOOT FAULT",
+    "Meaning": "The server must respect the service position",
+    "Example": "Coach Tip: Do not step over the line before hitting the serve.",
+    "ImageName": "foot_fault.png"
   },
   {
-    "Word": "EFFICIENT",
-    "Meaning": "Achieving results with less effort",
-    "Example": "A good student is efficient.",
-    "ImageName": "efficient.png"
+    "Word": "WALL REBOUND",
+    "Meaning": "Use the glass after the ball bounces",
+    "Example": "Coach Tip: Read the rebound early and move into position.",
+    "ImageName": "wall_usage.png"
   },
   {
-    "Word": "ANCIENT",
-    "Meaning": "Very old, from long ago",
-    "Example": "They discovered an ancient city.",
-    "ImageName": "ancient.png"
+    "Word": "DOUBLE WALL",
+    "Meaning": "Ball may rebound from more than one wall",
+    "Example": "Coach Tip: Watch the direction change after wall contact.",
+    "ImageName": "double_wall.png"
   },
   {
-    "Word": "DIVERSE",
-    "Meaning": "Showing variety and difference",
-    "Example": "Our class is diverse and rich.",
-    "ImageName": "diverse.png"
+    "Word": "CHANGE COURT",
+    "Meaning": "Learn movement and court transition",
+    "Example": "Coach Tip: Recover position quickly after each shot.",
+    "ImageName": "change_court.png"
+  },
+  {
+    "Word": "DEJADA",
+    "Meaning": "Soft attacking shot played short near the net",
+    "Example": "Coach Tip: Use dejada when opponents stay deep.",
+    "ImageName": "dejada.png"
+  },
+  {
+    "Word": "TWO WALL",
+    "Meaning": "Understanding two-wall rebounds",
+    "Example": "Coach Tip: Anticipate the ball after the second rebound.",
+    "ImageName": "two_wall.png"
   }
 ]
