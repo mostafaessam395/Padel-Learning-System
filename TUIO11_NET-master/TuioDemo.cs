@@ -1947,6 +1947,11 @@ public class LearningPage : Form, TuioListener
     private bool lessonOpen = false;
     private int lastLessonSymbolID = -1;
 
+    // ── Debounce: prevent same marker firing twice within 2 seconds ──
+    private DateTime _lastMarkerTime = DateTime.MinValue;
+    private int _lastMarkerDebounce = -1;
+    private const int DEBOUNCE_MS = 2000;
+
     private Label lblLevelBadge;
     private Label lblTitle;
     private Label lblSubtitle;
@@ -2192,8 +2197,8 @@ public class LearningPage : Form, TuioListener
 
         cardArranging = CreatePrimaryLessonCard(
             "Marker 5",
-            "Practice",
-            "Practice your shots\nusing the marker",
+            "AI Vision Coach",
+            "YOLO tracking detects\nyour position in real time",
             Color.FromArgb(224, 245, 221),
             Color.FromArgb(92, 182, 116),
             "arranging");
@@ -2324,8 +2329,8 @@ public class LearningPage : Form, TuioListener
 
         cardArranging = CreatePrimaryLessonCard(
             "Marker 5",
-            "Practice",
-            "Train with better\naccuracy and control",
+            "AI Vision Coach",
+            "YOLO tracking detects\nyour position in real time",
             Color.FromArgb(255, 238, 220),
             Color.FromArgb(220, 120, 60),
             "arranging");
@@ -2456,8 +2461,8 @@ public class LearningPage : Form, TuioListener
 
         cardArranging = CreatePrimaryLessonCard(
             "Marker 5",
-            "Advanced Practice",
-            "Train like a real\ncompetitive player",
+            "AI Vision Coach",
+            "YOLO tracking detects\nyour position in real time",
             Color.FromArgb(255, 248, 220),
             Color.FromArgb(200, 145, 30),
             "arranging");
@@ -3025,47 +3030,99 @@ public class LearningPage : Form, TuioListener
 
     public void addTuioObject(TuioObject o)
     {
+        // Safety: ignore if form not ready or not visible
+        if (!this.IsHandleCreated || this.IsDisposed) return;
+
         if (o.SymbolID == 20 && !lessonOpen)
         {
-            this.Invoke((MethodInvoker)delegate { this.Close(); });
+            Console.WriteLine($"[LearningPage] TUIO marker 20 → Back");
+            this.BeginInvoke((MethodInvoker)delegate { if (!this.IsDisposed) this.Close(); });
             return;
         }
+
         if (lessonOpen || o.SymbolID == lastLessonSymbolID) return;
 
-        this.Invoke((MethodInvoker)delegate
+        // Debounce: ignore same marker within DEBOUNCE_MS
+        if (o.SymbolID == _lastMarkerDebounce &&
+            (DateTime.Now - _lastMarkerTime).TotalMilliseconds < DEBOUNCE_MS) return;
+
+        Console.WriteLine($"[LearningPage] TUIO marker {o.SymbolID}  x={o.X:F2} y={o.Y:F2}");
+
+        _lastMarkerDebounce = o.SymbolID;
+        _lastMarkerTime = DateTime.Now;
+
+        this.BeginInvoke((MethodInvoker)delegate
         {
+            if (this.IsDisposed || lessonOpen) return;
+
             lessonOpen = true;
             lastLessonSymbolID = o.SymbolID;
-
             Form page = null;
 
-            if (o.SymbolID == 3)
-                page = new LessonPage(LessonPage.MapLevel(level) + " Padel Shots", client, 6);
-            else if (o.SymbolID == 4)
-                page = new LessonPage(LessonPage.MapLevel(level) + " Padel Rules", client, 7);
-            else if (o.SymbolID == 5)
-                page = new LessonPage(LessonPage.MapLevel(level) + " Padel Rule Builder", client, 8);
-            else if (o.SymbolID == 6)
-                page = new QuizPage(level, client);
-            else if (o.SymbolID == 7)
-                page = new SpellingPage(level, client);
-            else if (o.SymbolID == 8)
-                page = new CompetitionMode(level, client);
-            if (page != null)
+            try
             {
-                page.FormClosed += (s, e) =>
+                if (o.SymbolID == 3)
+                {
+                    Console.WriteLine("[LearningPage] Marker 3 → Padel Shots");
+                    page = new LessonPage(LessonPage.MapLevel(level) + " Padel Shots", client, 6);
+                }
+                else if (o.SymbolID == 4)
+                {
+                    Console.WriteLine("[LearningPage] Marker 4 → Padel Rules");
+                    page = new LessonPage(LessonPage.MapLevel(level) + " Padel Rules", client, 7);
+                }
+                else if (o.SymbolID == 5)
+                {
+                    Console.WriteLine("[LearningPage] Marker 5 → AI Vision Coach");
+                    page = new AIVisionCoachPage(LessonPage.MapLevel(level), client);
+                }
+                else if (o.SymbolID == 6)
+                {
+                    Console.WriteLine("[LearningPage] Marker 6 → Quick Challenge");
+                    page = new QuizPage(level, client);
+                }
+                else if (o.SymbolID == 7)
+                {
+                    Console.WriteLine("[LearningPage] Marker 7 → Speed Mode");
+                    page = new SpellingPage(level, client);
+                }
+                else if (o.SymbolID == 8)
+                {
+                    Console.WriteLine("[LearningPage] Marker 8 → Competition");
+                    page = new CompetitionMode(level, client);
+                }
+
+                if (page != null)
+                {
+                    page.FormClosed += (s, e) =>
+                    {
+                        Console.WriteLine("[LearningPage] Sub-page closed → resuming");
+                        lessonOpen = false;
+                        lastLessonSymbolID = -1;
+                        if (!this.IsDisposed) this.Show();
+                    };
+                    page.Show();
+                    this.Hide();
+                }
+                else
                 {
                     lessonOpen = false;
-                    this.Show();
-                };
-
-                page.Show();
-                this.Hide();
+                    lastLessonSymbolID = -1;
+                }
             }
-            else
+            catch (Exception ex)
             {
+                Console.WriteLine($"[LearningPage] ERROR opening page for marker {o.SymbolID}: {ex}");
                 lessonOpen = false;
                 lastLessonSymbolID = -1;
+                page?.Dispose();
+                try
+                {
+                    MessageBox.Show(
+                        $"Could not open page for marker {o.SymbolID}.\n\n{ex.Message}",
+                        "Navigation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+                catch { }
             }
         });
     }
@@ -3246,49 +3303,98 @@ public class LearningPage : Form, TuioListener
     // Gesture handler
     private void HandleGestureMarker(int markerId)
     {
-        if (!this.Visible || this.IsDisposed) return;
+        if (!this.Visible || this.IsDisposed || !this.IsHandleCreated) return;
+
+        Console.WriteLine($"[LearningPage] Gesture marker: {markerId}");
 
         if (markerId == 20)
         {
-            this.Invoke((MethodInvoker)delegate { this.Close(); });
+            Console.WriteLine("[LearningPage] Gesture 20 → Back");
+            this.BeginInvoke((MethodInvoker)delegate { if (!this.IsDisposed) this.Close(); });
             return;
         }
 
         if (lessonOpen || markerId == lastLessonSymbolID) return;
 
-        this.Invoke((MethodInvoker)delegate
+        // Debounce
+        if (markerId == _lastMarkerDebounce &&
+            (DateTime.Now - _lastMarkerTime).TotalMilliseconds < DEBOUNCE_MS) return;
+
+        _lastMarkerDebounce = markerId;
+        _lastMarkerTime = DateTime.Now;
+
+        this.BeginInvoke((MethodInvoker)delegate
         {
+            if (this.IsDisposed || lessonOpen) return;
+
             lessonOpen = true;
             lastLessonSymbolID = markerId;
-
             Form page = null;
-            if (markerId == 3)
-                page = new LessonPage(LessonPage.MapLevel(level) + " Padel Shots", client, 6);
-            else if (markerId == 4)
-                page = new LessonPage(LessonPage.MapLevel(level) + " Padel Rules", client, 7);
-            else if (markerId == 5)
-                page = new LessonPage(LessonPage.MapLevel(level) + " Padel Rule Builder", client, 8);
-            else if (markerId == 6)
-                page = new QuizPage(level, client);
-            else if (markerId == 7)
-                page = new SpellingPage(level, client);
-            else if (markerId == 8 || markerId == 30)
-                page = new CompetitionMode(level, client);
 
-            if (page != null)
+            try
             {
-                page.FormClosed += (s, e) =>
+                if (markerId == 3)
+                {
+                    Console.WriteLine("[LearningPage] Gesture 3 → Padel Shots");
+                    page = new LessonPage(LessonPage.MapLevel(level) + " Padel Shots", client, 6);
+                }
+                else if (markerId == 4)
+                {
+                    Console.WriteLine("[LearningPage] Gesture 4 → Padel Rules");
+                    page = new LessonPage(LessonPage.MapLevel(level) + " Padel Rules", client, 7);
+                }
+                else if (markerId == 5)
+                {
+                    Console.WriteLine("[LearningPage] Gesture 5 → AI Vision Coach");
+                    page = new AIVisionCoachPage(LessonPage.MapLevel(level), client);
+                }
+                else if (markerId == 6)
+                {
+                    Console.WriteLine("[LearningPage] Gesture 6 → Quick Challenge");
+                    page = new QuizPage(level, client);
+                }
+                else if (markerId == 7)
+                {
+                    Console.WriteLine("[LearningPage] Gesture 7 → Speed Mode");
+                    page = new SpellingPage(level, client);
+                }
+                else if (markerId == 8 || markerId == 30)
+                {
+                    Console.WriteLine("[LearningPage] Gesture 8/30 → Competition");
+                    page = new CompetitionMode(level, client);
+                }
+
+                if (page != null)
+                {
+                    page.FormClosed += (s, e) =>
+                    {
+                        Console.WriteLine("[LearningPage] Sub-page closed → resuming");
+                        lessonOpen = false;
+                        lastLessonSymbolID = -1;
+                        if (!this.IsDisposed) this.Show();
+                    };
+                    page.Show();
+                    this.Hide();
+                }
+                else
                 {
                     lessonOpen = false;
-                    this.Show();
-                };
-                page.Show();
-                this.Hide();
+                    lastLessonSymbolID = -1;
+                }
             }
-            else
+            catch (Exception ex)
             {
+                Console.WriteLine($"[LearningPage] ERROR opening page for gesture {markerId}: {ex}");
                 lessonOpen = false;
                 lastLessonSymbolID = -1;
+                page?.Dispose();
+                try
+                {
+                    MessageBox.Show(
+                        $"Could not open page for marker {markerId}.\n\n{ex.Message}",
+                        "Navigation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+                catch { }
             }
         });
     }
@@ -4356,9 +4462,10 @@ public class LessonPage : Form, TuioListener
 
     public void addTuioObject(TuioObject o)
     {
+        if (!this.IsHandleCreated || this.IsDisposed) return;
         if (o.SymbolID == 20)
         {
-            this.Invoke((MethodInvoker)delegate { this.Close(); });
+            this.BeginInvoke((MethodInvoker)delegate { if (!this.IsDisposed) this.Close(); });
             return;
         }
         if (o.SymbolID == controlMarkerId)
@@ -4489,17 +4596,9 @@ public class LessonPage : Form, TuioListener
     // Gesture handler
     private void HandleGestureMarker(int markerId)
     {
-        if (!this.Visible || this.IsDisposed) return;
-
+        if (!this.Visible || this.IsDisposed || !this.IsHandleCreated) return;
         if (markerId == 20)
-        {
-            this.Invoke((MethodInvoker)delegate { this.Close(); });
-        }
-        // Optionally, you can also use the same marker to navigate
-        // else if (markerId == controlMarkerId)
-        // {
-        //     this.BeginInvoke((MethodInvoker)delegate { NextItem(); });
-        // }
+            this.BeginInvoke((MethodInvoker)delegate { if (!this.IsDisposed) this.Close(); });
     }
 }
 

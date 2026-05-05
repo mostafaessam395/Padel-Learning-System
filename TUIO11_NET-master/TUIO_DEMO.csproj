@@ -50,6 +50,7 @@
   </Target>
   -->
   <ItemGroup>
+    <Compile Include="AIVisionCoachPage.cs" />
     <Compile Include="AnalyticsEngine.cs" />
     <Compile Include="CompetitionMode.cs" />
     <Compile Include="FaceIDClient.cs" />
@@ -83,6 +84,7 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
+    <Reference Include="System.Net.Http" />
     <Reference Include="System.Speech" />
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>
