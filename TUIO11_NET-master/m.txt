@@ -1,0 +1,2 @@
+python FaceID\yolo_tracking_server.py
+bin\Debug\TuioDemo.exe
