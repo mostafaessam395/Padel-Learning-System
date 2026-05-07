@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -43,11 +44,13 @@ public class AIVisionCoachPage : Form, TuioListener
     private Label      lblBallZoneVal;
     private Label      lblFeedbackVal;
     private Label      lblScoreVal;
-    private ComboBox   cmbActivity;
-    private Button     btnStart;
-    private Button     btnStop;
-    private Button     btnLaunchServer;
     private Panel      offlinePanel;
+    // Activity selector (replaces ComboBox)
+    private Panel[]    _activityCards;
+    private int        _activityIndex = 0;
+    // Marker debounce
+    private DateTime   _lastMarkerAction = DateTime.MinValue;
+    private const int  MARKER_COOLDOWN_MS = 1200;
 
     // ─────────────────────────────────────────────────────────────────────
     //  Constructor
@@ -92,11 +95,47 @@ public class AIVisionCoachPage : Form, TuioListener
     {
         if (!this.Visible || this.IsDisposed) return;
         Console.WriteLine($"[AIVisionCoach] Gesture marker detected: {markerId}");
-        if (markerId == 20)
-        {
-            Console.WriteLine("[AIVisionCoach] Marker 20 → closing page (Back).");
-            SafeInvoke(() => this.Close());
-        }
+        SafeInvoke(() => DispatchMarker(markerId));
+    }
+
+    private void DispatchMarker(int id)
+    {
+        if (id == 20) { Console.WriteLine("[AIVisionCoach] Marker 20 → Back"); this.Close(); return; }
+
+        // Debounce for action markers
+        if ((DateTime.Now - _lastMarkerAction).TotalMilliseconds < MARKER_COOLDOWN_MS) return;
+        _lastMarkerAction = DateTime.Now;
+
+        if (id == 31) { Console.WriteLine("[AIVisionCoach] Marker 31 → Start Tracking"); _ = OnStartTracking(); }
+        if (id == 32) { Console.WriteLine("[AIVisionCoach] Marker 32 → Stop Tracking");  _ = OnStopTracking(); }
+        if (id == 33) { Console.WriteLine("[AIVisionCoach] Marker 33 → Next Activity");  SelectActivity(+1); }
+        if (id == 34) { Console.WriteLine("[AIVisionCoach] Marker 34 → Prev Activity");  SelectActivity(-1); }
+    }
+
+    /// <summary>
+    /// Moves activity selection by +1 (next) or -1 (previous), wraps around.
+    /// Updates _activity and repaints the activity cards.
+    /// </summary>
+    private void SelectActivity(int direction)
+    {
+        if (_activityCards == null || _activityCards.Length == 0) return;
+        string[] activities = ActivitiesForLevel(_level);
+
+        // Deselect current
+        _activityCards[_activityIndex].BackColor = Color.FromArgb(225, 235, 250);
+        var oldLbl = _activityCards[_activityIndex].Controls.OfType<Label>().FirstOrDefault();
+        if (oldLbl != null) { oldLbl.ForeColor = Color.FromArgb(15, 48, 100); oldLbl.Font = new Font("Segoe UI", 10, FontStyle.Regular); }
+
+        // Move
+        _activityIndex = (_activityIndex + direction + activities.Length) % activities.Length;
+        _activity = activities[_activityIndex];
+
+        // Highlight new
+        _activityCards[_activityIndex].BackColor = Color.FromArgb(30, 80, 180);
+        var newLbl = _activityCards[_activityIndex].Controls.OfType<Label>().FirstOrDefault();
+        if (newLbl != null) { newLbl.ForeColor = Color.White; newLbl.Font = new Font("Segoe UI", 10, FontStyle.Bold); }
+
+        Console.WriteLine($"[AIVisionCoach] Activity selected: {_activity}");
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -106,11 +145,7 @@ public class AIVisionCoachPage : Form, TuioListener
     {
         if (!this.IsHandleCreated || this.IsDisposed) return;
         Console.WriteLine($"[AIVisionCoach] TUIO marker: {o.SymbolID}");
-        if (o.SymbolID == 20)
-        {
-            Console.WriteLine("[AIVisionCoach] Marker 20 → Back");
-            this.BeginInvoke((MethodInvoker)delegate { if (!this.IsDisposed) this.Close(); });
-        }
+        this.BeginInvoke((MethodInvoker)delegate { if (!this.IsDisposed) DispatchMarker(o.SymbolID); });
     }
 
     public void updateTuioObject(TuioObject o) { }
@@ -252,31 +287,11 @@ public class AIVisionCoachPage : Form, TuioListener
         };
 
         var lbl = Lbl(
-            "⚠   YOLO server is not running.  Click \"Launch YOLO Server\" to start it, then click \"Start Tracking\".",
+            "⚠   YOLO server is not running.  Place Marker 31 to Start Tracking after launching the server.",
             "Segoe UI", 10, FontStyle.Bold, Color.FromArgb(130, 70, 0));
         lbl.Dock      = DockStyle.Fill;
         lbl.TextAlign = ContentAlignment.MiddleLeft;
         panel.Controls.Add(lbl);
-
-        btnLaunchServer = new Button
-        {
-            Text      = "⚡  Launch YOLO Server",
-            Size      = new Size(210, 36),
-            Font      = new Font("Segoe UI", 10, FontStyle.Bold),
-            BackColor = Color.FromArgb(195, 110, 0),
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Cursor    = Cursors.Hand,
-            Anchor    = AnchorStyles.Top | AnchorStyles.Right,
-        };
-        btnLaunchServer.FlatAppearance.BorderSize = 0;
-        btnLaunchServer.Click += OnLaunchServer;
-
-        // Position button on the right, vertically centred
-        panel.Controls.Add(btnLaunchServer);
-        panel.Resize += (s, e) =>
-            btnLaunchServer.Location = new Point(panel.Width - 226, (panel.Height - 36) / 2);
-        btnLaunchServer.Location = new Point(1100, 8);
 
         return panel;
     }
@@ -361,25 +376,52 @@ public class AIVisionCoachPage : Form, TuioListener
         flow.Controls.Add(lblLevelVal);
         flow.Controls.Add(Spacer(cardW, 10));
 
-        // ── Activity ──────────────────────────────────────────────────────
+        // ── Activity selector — TUIO-driven, no mouse/keyboard ───────────
         flow.Controls.Add(SectionLabel("Current Activity", cardW));
-        cmbActivity = new ComboBox
+        flow.Controls.Add(Spacer(cardW, 2));
+
+        // Hint label
+        var actHint = new Label {
+            Text = "Marker 33 = Next  •  Marker 34 = Previous",
+            Font = new Font("Segoe UI", 8, FontStyle.Italic),
+            ForeColor = Color.FromArgb(100, 130, 180),
+            BackColor = Color.Transparent,
+            AutoSize = false, Size = new Size(cardW, 16),
+            Margin = new Padding(0, 0, 0, 4) };
+        flow.Controls.Add(actHint);
+
+        // Build one card per activity
+        string[] activities = ActivitiesForLevel(_level);
+        _activityIndex = Array.IndexOf(activities, _activity);
+        if (_activityIndex < 0) _activityIndex = 0;
+        _activityCards = new Panel[activities.Length];
+
+        for (int ai = 0; ai < activities.Length; ai++)
         {
-            Width         = cardW,
-            Height        = 34,
-            Font          = new Font("Segoe UI", 11, FontStyle.Bold),
-            ForeColor     = Color.FromArgb(15, 48, 100),
-            BackColor     = Color.White,
-            DropDownStyle = ComboBoxStyle.DropDownList,
-            Margin        = new Padding(0, 2, 0, 0),
-        };
-        foreach (string a in ActivitiesForLevel(_level))
-            cmbActivity.Items.Add(a);
-        cmbActivity.SelectedItem = _activity;
-        cmbActivity.SelectedIndexChanged += (s, e) =>
-            _activity = cmbActivity.SelectedItem?.ToString() ?? _activity;
-        flow.Controls.Add(cmbActivity);
-        flow.Controls.Add(Spacer(cardW, 12));
+            int idx = ai;   // capture
+            bool selected = idx == _activityIndex;
+
+            var aCard = new Panel {
+                Size = new Size(cardW, 30),
+                BackColor = selected
+                    ? Color.FromArgb(30, 80, 180)
+                    : Color.FromArgb(225, 235, 250),
+                Margin = new Padding(0, 0, 0, 3),
+                Cursor = Cursors.Default };
+
+            var aLbl = new Label {
+                Text = activities[idx],
+                Font = new Font("Segoe UI", 10, selected ? FontStyle.Bold : FontStyle.Regular),
+                ForeColor = selected ? Color.White : Color.FromArgb(15, 48, 100),
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(8, 0, 0, 0),
+                BackColor = Color.Transparent };
+            aCard.Controls.Add(aLbl);
+            _activityCards[idx] = aCard;
+            flow.Controls.Add(aCard);
+        }
+        flow.Controls.Add(Spacer(cardW, 8));
 
         // ── Detected objects ──────────────────────────────────────────────
         flow.Controls.Add(SectionLabel("Detected Objects", cardW));
@@ -431,33 +473,55 @@ public class AIVisionCoachPage : Form, TuioListener
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    //  Button row
+    //  Marker instruction row (replaces button row)
     // ─────────────────────────────────────────────────────────────────────
     private Panel BuildButtonRow()
     {
         var row = new Panel
         {
             Dock      = DockStyle.Fill,
-            BackColor = Color.FromArgb(210, 228, 248),
-            Padding   = new Padding(20, 12, 20, 12),
+            BackColor = Color.FromArgb(14, 22, 46),
+            Padding   = new Padding(20, 0, 20, 0),
         };
 
-        btnStart = DashBtn("▶   Start Tracking", Color.FromArgb(20, 135, 75), Color.White);
-        btnStart.Location = new Point(20, 12);
-        btnStart.Click   += async (s, e) => await OnStartTracking();
+        var flow = new FlowLayoutPanel {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false, BackColor = Color.Transparent };
 
-        btnStop = DashBtn("■   Stop Tracking", Color.FromArgb(185, 35, 35), Color.White);
-        btnStop.Location = new Point(240, 12);
-        btnStop.Click   += async (s, e) => await OnStopTracking();
+        var markerDefs = new (string Id, string Action, Color Clr)[] {
+            ("31", "Start Tracking", Color.FromArgb(20, 135, 75)),
+            ("32", "Stop Tracking",  Color.FromArgb(185, 35, 35)),
+            ("33", "Next Activity",  Color.FromArgb(55, 125, 255)),
+            ("34", "Prev Activity",  Color.FromArgb(175, 55, 220)),
+            ("20", "Back",           Color.FromArgb(38, 72, 145)),
+        };
 
-        var btnBack = DashBtn("←   Back", Color.FromArgb(38, 72, 145), Color.White);
-        btnBack.Location = new Point(460, 12);
-        btnBack.Click   += (s, e) => this.Close();
+        foreach (var (mid, action, clr) in markerDefs)
+        {
+            var card = new Panel {
+                Size = new Size(160, 46), BackColor = Color.FromArgb(18, 28, 54),
+                Margin = new Padding(0, 12, 14, 12), Cursor = Cursors.Default };
+            card.Paint += (s, e) => {
+                using (var pen = new System.Drawing.Pen(clr, 1.2f))
+                    e.Graphics.DrawRectangle(pen, 0, 0, card.Width - 1, card.Height - 1);
+                using (var b = new System.Drawing.SolidBrush(clr))
+                    e.Graphics.FillRectangle(b, 0, 0, card.Width, 4);
+            };
+            card.Controls.Add(new Label {
+                Text = $"▶  Marker {mid}",
+                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                ForeColor = clr, BackColor = Color.Transparent,
+                Location = new Point(8, 6), AutoSize = true });
+            card.Controls.Add(new Label {
+                Text = action,
+                Font = new Font("Segoe UI", 9),
+                ForeColor = Color.FromArgb(200, 215, 240), BackColor = Color.Transparent,
+                Location = new Point(8, 24), AutoSize = true });
+            flow.Controls.Add(card);
+        }
 
-        row.Controls.Add(btnStart);
-        row.Controls.Add(btnStop);
-        row.Controls.Add(btnBack);
-
+        row.Controls.Add(flow);
         return row;
     }
 
@@ -588,7 +652,7 @@ public class AIVisionCoachPage : Form, TuioListener
             SafeInvoke(() =>
             {
                 offlinePanel.Visible = true;
-                lblFeedbackVal.Text      = "YOLO server is not running.\nClick \"Launch YOLO Server\" first.";
+                lblFeedbackVal.Text      = "YOLO server is not running.\nPlace Marker 31 after launching the server.";
                 lblFeedbackVal.ForeColor = Color.FromArgb(160, 60, 0);
             });
         }

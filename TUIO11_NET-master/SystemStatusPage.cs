@@ -2,34 +2,42 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
+using TUIO;
 using TuioDemo;
 
 /// <summary>
 /// Admin-only system status page.
 /// Shows Bluetooth, TUIO, YOLO, Face ID, Gaze, Gesture, and content JSON status.
+/// Navigation: Marker 35 = Refresh, Marker 20 = Back.
 /// </summary>
-public class SystemStatusPage : Form
+public class SystemStatusPage : Form, TuioListener
 {
     private readonly bool _btConnected;
     private readonly bool _tuioConnected;
     private readonly GestureClient _gestureRef;
     private readonly FaceIDClient  _faceRef;
     private readonly GazeClient    _gazeRef;
+    private readonly TuioClient    _tuioClient;
 
     private readonly ContentService _svc = new ContentService();
+
+    // Debounce: prevent repeated triggers while marker stays visible
+    private bool _refreshCooldown = false;
 
     public SystemStatusPage(
         bool btConnected,
         bool tuioConnected,
-        GestureClient gestureRef = null,
-        FaceIDClient  faceRef    = null,
-        GazeClient    gazeRef    = null)
+        GestureClient gestureRef  = null,
+        FaceIDClient  faceRef     = null,
+        GazeClient    gazeRef     = null,
+        TuioClient    tuioClient  = null)
     {
         _btConnected   = btConnected;
         _tuioConnected = tuioConnected;
         _gestureRef    = gestureRef;
         _faceRef       = faceRef;
         _gazeRef       = gazeRef;
+        _tuioClient    = tuioClient;
 
         this.Text           = "System Status — Admin";
         this.Size           = new Size(680, 580);
@@ -38,6 +46,17 @@ public class SystemStatusPage : Form
         this.BackColor      = Color.FromArgb(14, 22, 44);
 
         BuildUI();
+
+        Shown += (s, e) =>
+        {
+            if (_tuioClient != null) _tuioClient.addTuioListener(this);
+            GestureRouter.OnGestureMarker += HandleGestureMarker;
+        };
+        FormClosed += (s, e) =>
+        {
+            GestureRouter.OnGestureMarker -= HandleGestureMarker;
+            if (_tuioClient != null) _tuioClient.removeTuioListener(this);
+        };
     }
 
     private void BuildUI()
@@ -84,38 +103,77 @@ public class SystemStatusPage : Form
         AddRow(ref y, "Content JSON",            jsonExists,                    jsonExists ? $"{items.Count} items total" : "File missing — will be created on first use");
         AddRow(ref y, "Active Content Items",    activeCount > 0,               $"{activeCount} active items");
 
-        y += 16;
+        y += 12;
 
-        var btnRefresh = new Button
-        {
-            Text      = "🔄 Refresh",
-            Size      = new Size(130, 36),
+        // Marker instructions — compact, fits within form
+        this.Controls.Add(new Label {
+            Text      = "▶  Marker 35 : Refresh Status",
+            Font      = new Font("Segoe UI", 10, FontStyle.Bold),
+            ForeColor = Color.FromArgb(55, 125, 255),
+            AutoSize  = false, Size = new Size(420, 24),
             Location  = new Point(24, y),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(40, 100, 200),
-            ForeColor = Color.White,
-            Font      = new Font("Segoe UI", 10, FontStyle.Bold),
-            Cursor    = Cursors.Hand,
-        };
-        btnRefresh.FlatAppearance.BorderSize = 0;
-        btnRefresh.Click += (s, e) => { this.Controls.Clear(); BuildUI(); };
-        this.Controls.Add(btnRefresh);
+            BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.MiddleLeft });
 
-        var btnClose = new Button
-        {
-            Text      = "← Back",
-            Size      = new Size(130, 36),
-            Location  = new Point(170, y),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(60, 70, 100),
-            ForeColor = Color.White,
+        this.Controls.Add(new Label {
+            Text      = "◀  Marker 20 : Back to Admin Dashboard",
             Font      = new Font("Segoe UI", 10, FontStyle.Bold),
-            Cursor    = Cursors.Hand,
-        };
-        btnClose.FlatAppearance.BorderSize = 0;
-        btnClose.Click += (s, e) => this.Close();
-        this.Controls.Add(btnClose);
+            ForeColor = Color.FromArgb(190, 55, 75),
+            AutoSize  = false, Size = new Size(420, 24),
+            Location  = new Point(24, y + 28),
+            BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.MiddleLeft });
+
+        // Ensure form is tall enough to show both instructions
+        int needed = y + 28 + 24 + 16;
+        if (this.ClientSize.Height < needed)
+            this.ClientSize = new Size(this.ClientSize.Width, needed);
     }
+
+    // ── Marker / Gesture handling ─────────────────────────────────────────
+
+    private void HandleGestureMarker(int id)
+    {
+        if (!Visible || IsDisposed) return;
+        BeginInvoke((MethodInvoker)(() => Dispatch(id)));
+    }
+
+    private void Dispatch(int id)
+    {
+        if (id == 20)
+        {
+            Console.WriteLine("[SystemStatus] Marker 20 → Back");
+            Close();
+            return;
+        }
+
+        if (id == 35)
+        {
+            if (_refreshCooldown) return;
+            _refreshCooldown = true;
+            Console.WriteLine("[SystemStatus] Marker 35 → Refresh");
+            Controls.Clear();
+            BuildUI();
+
+            // Reset cooldown after 2 seconds
+            var t = new System.Windows.Forms.Timer { Interval = 2000 };
+            t.Tick += (s, e) => { t.Stop(); t.Dispose(); _refreshCooldown = false; };
+            t.Start();
+        }
+    }
+
+    public void addTuioObject(TuioObject o)
+        => BeginInvoke((MethodInvoker)(() => Dispatch(o.SymbolID)));
+
+    public void updateTuioObject(TuioObject o) { }
+    public void removeTuioObject(TuioObject o) { }
+    public void addTuioCursor(TuioCursor c)    { }
+    public void updateTuioCursor(TuioCursor c) { }
+    public void removeTuioCursor(TuioCursor c) { }
+    public void addTuioBlob(TuioBlob b)        { }
+    public void updateTuioBlob(TuioBlob b)     { }
+    public void removeTuioBlob(TuioBlob b)     { }
+    public void refresh(TuioTime t)            { }
 
     private void AddRow(ref int y, string label, bool ok, string detail)
     {

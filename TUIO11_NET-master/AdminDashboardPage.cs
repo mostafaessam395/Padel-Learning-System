@@ -96,23 +96,23 @@ public class AdminDashboardPage : Form, TuioListener
         contentWrapper.Controls.Add(cardHolder);
 
         // Build the 5 cards
-        var cardDefs = new (string Icon, string Title, string Sub, Color Accent, string Marker, Action Click)[]
+        var cardDefs = new (string Icon, string Title, string Sub, Color Accent, string Marker)[]
         {
             ("📋", "Manage Content",
              "Add, edit and deactivate\ntraining content by level,\nmarker and activity",
-             Color.FromArgb(55, 125, 255), "Marker 31", OpenContentManager),
+             Color.FromArgb(55, 125, 255), "Place Marker 31 to open"),
 
             ("🎾", "Test Levels",
              "Open Beginner, Intermediate\nor Advanced training pages\nfor demo testing",
-             Color.FromArgb(50, 185, 105), "Marker 32", OpenTestLevels),
+             Color.FromArgb(50, 185, 105), "Place Marker 32 to open"),
 
             ("🎯", "Test Markers",
              "Quickly open any marker\npage to verify navigation\nand content",
-             Color.FromArgb(220, 140, 40), "Marker 33", OpenTestMarkers),
+             Color.FromArgb(220, 140, 40), "Place Marker 33 to open"),
 
             ("📊", "System Status",
              "View Bluetooth, TUIO, YOLO,\nFace ID, Gaze, Gesture\nand content status",
-             Color.FromArgb(175, 55, 220), "Marker 34", OpenSystemStatus),
+             Color.FromArgb(175, 55, 220), "Place Marker 34 to open"),
         };
 
         const int CARD_W   = 280;
@@ -123,16 +123,16 @@ public class AdminDashboardPage : Form, TuioListener
         for (int i = 0; i < cardDefs.Length; i++)
         {
             var c = cardDefs[i];
-            var card = BuildCard(c.Icon, c.Title, c.Sub, c.Accent, c.Marker, c.Click, CARD_W, CARD_H);
+            var card = BuildCard(c.Icon, c.Title, c.Sub, c.Accent, c.Marker, CARD_W, CARD_H);
             card.Location = new Point(i * (CARD_W + CARD_GAP), 0);
             cardHolder.Controls.Add(card);
         }
 
-        // Row 2: Back button centered under the 4 cards
+        // Row 2: Back card centered under the 4 cards
         int row1Width = cardDefs.Length * CARD_W + (cardDefs.Length - 1) * CARD_GAP;
         var backCard  = BuildCard("🏠", "Back to System",
             "Return to the main\nplayer home screen",
-            Color.FromArgb(190, 55, 75), "Marker 20", GoBack,
+            Color.FromArgb(190, 55, 75), "Place Marker 20 to go back",
             CARD_W, 140);
         backCard.Location = new Point((row1Width - CARD_W) / 2, CARD_H + CARD_GAP);
         cardHolder.Controls.Add(backCard);
@@ -202,7 +202,7 @@ public class AdminDashboardPage : Form, TuioListener
 
         var lblSub = new Label
         {
-            Text      = "Bluetooth Admin Mode  •  Context-Based CRUD Content Management",
+            Text      = "Use TUIO Markers to navigate  •  Marker-Only Interaction  •  No mouse required",
             Font      = new Font("Segoe UI", 10, FontStyle.Italic),
             ForeColor = Color.FromArgb(120, 165, 240),
             AutoSize  = false,
@@ -235,43 +235,37 @@ public class AdminDashboardPage : Form, TuioListener
     // ── Card builder ──────────────────────────────────────────────────────
 
     private Panel BuildCard(string icon, string title, string sub,
-                            Color accent, string marker, Action onClick,
+                            Color accent, string marker,
                             int width, int height)
     {
-        // Outer panel — painted with rounded dark background
         var card = new Panel
         {
             Size      = new Size(width, height),
             BackColor = Color.Transparent,
-            Cursor    = Cursors.Hand,
+            Cursor    = Cursors.Default,   // no mouse interaction
         };
 
-        // Inner rounded panel (solid background so children render correctly)
         var inner = new Panel
         {
             Size      = new Size(width - 4, height - 4),
             Location  = new Point(2, 2),
             BackColor = Color.FromArgb(22, 34, 66),
         };
-        // Clip to rounded rectangle
         inner.Paint += (s, e) =>
         {
             var g  = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             var rc = new Rectangle(0, 0, inner.Width - 1, inner.Height - 1);
 
-            // Background gradient
             using (var b = new LinearGradientBrush(rc,
                 Color.FromArgb(28, 42, 80), Color.FromArgb(16, 26, 54), 90f))
             using (var path = RoundedRect(rc, 16))
                 g.FillPath(b, path);
 
-            // Accent top bar
             using (var ab = new SolidBrush(accent))
             using (var path = RoundedRect(new Rectangle(0, 0, inner.Width - 1, 5), 3))
                 g.FillPath(ab, path);
 
-            // Border
             using (var bp = new Pen(Color.FromArgb(50, accent.R, accent.G, accent.B), 1.5f))
             using (var path = RoundedRect(rc, 16))
                 g.DrawPath(bp, path);
@@ -306,54 +300,36 @@ public class AdminDashboardPage : Form, TuioListener
             TextAlign = ContentAlignment.MiddleLeft,
         };
 
-        // Description
+        // Description — taller now that button is gone
         var lblSub = new Label
         {
             Text      = sub,
             Font      = new Font("Segoe UI", 9, FontStyle.Regular),
             ForeColor = Color.FromArgb(155, 180, 225),
             AutoSize  = false,
-            Size      = new Size(width - pad * 2, height - 140),
+            Size      = new Size(width - pad * 2, height - 130),
             Location  = new Point(pad, 80),
             BackColor = Color.Transparent,
             TextAlign = ContentAlignment.TopLeft,
         };
 
-        // Marker label
+        // Marker instruction — large, prominent, replaces the button
         var lblMarker = new Label
         {
-            Text      = marker,
-            Font      = new Font("Segoe UI", 8, FontStyle.Bold),
+            Text      = "▶  " + marker,
+            Font      = new Font("Segoe UI", 11, FontStyle.Bold),
             ForeColor = accent,
-            AutoSize  = true,
+            AutoSize  = false,
+            Size      = new Size(width - pad * 2, 30),
+            Location  = new Point(pad, height - 46),
             BackColor = Color.Transparent,
-            Location  = new Point(pad, height - 56),
+            TextAlign = ContentAlignment.MiddleLeft,
         };
-
-        // Open button
-        var btn = new Button
-        {
-            Text      = "Open  →",
-            Size      = new Size(100, 32),
-            Location  = new Point(width - 118, height - 58),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = accent,
-            ForeColor = Color.White,
-            Font      = new Font("Segoe UI", 9, FontStyle.Bold),
-            Cursor    = Cursors.Hand,
-        };
-        btn.FlatAppearance.BorderSize = 0;
-        btn.Click += (s, e) => onClick?.Invoke();
 
         inner.Controls.Add(lblIcon);
         inner.Controls.Add(lblTitle);
         inner.Controls.Add(lblSub);
         inner.Controls.Add(lblMarker);
-        inner.Controls.Add(btn);
-
-        // Hover: lighten border
-        card.MouseEnter += (s, e) => inner.Invalidate();
-        card.MouseLeave += (s, e) => inner.Invalidate();
 
         return card;
     }
@@ -364,7 +340,7 @@ public class AdminDashboardPage : Form, TuioListener
     private void OpenTestLevels()     => new TestLevelsPage(_tuioClient).Show();
     private void OpenTestMarkers()    => new TestMarkersPage(_tuioClient).Show();
     private void OpenSystemStatus()   => new SystemStatusPage(
-        _btConnected, _tuioClient != null, _gestureRef, _faceRef, _gazeRef).Show();
+        _btConnected, _tuioClient != null, _gestureRef, _faceRef, _gazeRef, _tuioClient).Show();
     private void GoBack()             => this.Close();
 
     // ── TUIO ──────────────────────────────────────────────────────────────

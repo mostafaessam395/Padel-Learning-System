@@ -29,6 +29,16 @@ public class ContentManagerPage : Form, TuioListener
     // buttons
     private Button _uBtnAdd, _uBtnSave, _uBtnDel, _uBtnDeact, _uBtnClr;
 
+    // ── TUIO marker state ─────────────────────────────────────────────────
+    // Marker 36 rotation → user selection
+    private float  _marker36LastAngle  = float.NaN;   // last processed angle (radians)
+    private DateTime _marker36LastMove = DateTime.MinValue; // debounce timestamp
+    // Action marker debounce (31-35, 20)
+    private int    _lastActionMarker   = -1;
+    private DateTime _lastActionTime   = DateTime.MinValue;
+    private const int ACTION_COOLDOWN_MS = 800;   // ms between same-marker actions
+    private const float ROTATION_THRESHOLD = 0.45f; // ~26 degrees in radians
+
     // ── content tab state ─────────────────────────────────────────────────
     private DataGridView  _cGrid;
     private List<PadelContentItem> _cItems = new List<PadelContentItem>();
@@ -94,12 +104,7 @@ public class ContentManagerPage : Form, TuioListener
             ForeColor = Color.White, AutoSize = false,
             Size = new Size(480, 36), Location = new Point(18, 8),
             BackColor = Color.Transparent };
-        var hBack = MkBtn("← Back", Color.FromArgb(38, 55, 120), 100, 30);
-        hBack.Click += (s, e) => Close();
         hdr.Controls.Add(hLbl);
-        hdr.Controls.Add(hBack);
-        hdr.Resize += (s, e) => hBack.Location = new Point(hdr.Width - 116, 11);
-        hBack.Location = new Point(1200, 11);
         Controls.Add(hdr);
 
         // ── tab control ───────────────────────────────────────────────────
@@ -127,47 +132,26 @@ public class ContentManagerPage : Form, TuioListener
     // ═════════════════════════════════════════════════════════════════════
     private void BuildUsersTab(TabPage tab)
     {
-        // Outer layout: search bar (top) | grid | form+buttons
+        // Outer layout: title+filter row | TUIO hint row | grid | form
         var outer = new TableLayoutPanel {
             Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1,
             BackColor = PANEL };
         outer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));   // search bar
-        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 58));    // grid
-        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 42));    // form
+        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));   // row 0: title + filters
+        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));   // row 1: grid
+        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 250));  // row 2: form
         tab.Controls.Add(outer);
 
-        // ── row 0: search / filter bar ────────────────────────────────────
-        var searchBar = new Panel { Dock = DockStyle.Fill, BackColor = HEADER,
-            Padding = new Padding(10, 7, 10, 7) };
-        outer.Controls.Add(searchBar, 0, 0);
+        // ── row 0: title only ─────────────────────────────────────────────
+        var filterBar = new Panel { Dock = DockStyle.Fill, BackColor = HEADER,
+            Padding = new Padding(10, 10, 10, 8) };
+        outer.Controls.Add(filterBar, 0, 0);
 
-        var uSearch = MkTxt(200);
-        uSearch.ForeColor = TXT_DIM; uSearch.Text = "Search name or ID...";
-        uSearch.GotFocus  += (s, e) => { if (uSearch.Text.StartsWith("Search")) { uSearch.Text = ""; uSearch.ForeColor = TXT; } };
-        uSearch.LostFocus += (s, e) => { if (uSearch.Text == "") { uSearch.Text = "Search name or ID..."; uSearch.ForeColor = TXT_DIM; } };
-
-        var uRoleFilter = MkCbo(new[] { "All Roles", "Player", "Admin" }, 110);
-        var uActiveFilter = MkCbo(new[] { "All", "Active", "Inactive" }, 100);
-        var bSearch = MkBtn("Search", ACCENT, 80, 28);
-        var bShowAll = MkBtn("Show All", Color.FromArgb(55, 65, 100), 80, 28);
-
-        bSearch.Click += (s, e) => ReloadUsers(
-            uSearch.Text.StartsWith("Search") ? "" : uSearch.Text,
-            uRoleFilter.SelectedItem?.ToString(),
-            uActiveFilter.SelectedItem?.ToString());
-        bShowAll.Click += (s, e) => { uSearch.Text = "Search name or ID..."; uSearch.ForeColor = TXT_DIM;
-            uRoleFilter.SelectedIndex = 0; uActiveFilter.SelectedIndex = 0; ReloadUsers(); };
-
-        var sf = new FlowLayoutPanel { Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight, WrapContents = false,
-            BackColor = Color.Transparent, Padding = new Padding(0) };
-        void SA(Control c, int gap = 8) { c.Margin = new Padding(0, 0, gap, 0); sf.Controls.Add(c); }
-        SA(new Label { Text = "Users Management", Font = new Font("Segoe UI", 10, FontStyle.Bold),
+        filterBar.Controls.Add(new Label {
+            Text = "Users Management",
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
             ForeColor = ACCENT2, AutoSize = true, BackColor = Color.Transparent,
-            Margin = new Padding(0, 5, 20, 0) });
-        SA(uSearch); SA(uRoleFilter); SA(uActiveFilter); SA(bSearch); SA(bShowAll, 0);
-        searchBar.Controls.Add(sf);
+            Location = new Point(10, 14) });
 
         // ── row 1: users grid ─────────────────────────────────────────────
         var gridWrap = new Panel { Dock = DockStyle.Fill,
@@ -180,10 +164,7 @@ public class ContentManagerPage : Form, TuioListener
         gridWrap.Controls.Add(_uGrid);
 
         // ── row 2: edit form ──────────────────────────────────────────────
-        // Row 2 needs enough height for: title(26) + 3 field rows(52*3=156) + buttons(44) + padding = ~240px
-        // Change row 2 from Percent to Absolute so the form never collapses
         outer.RowStyles[2] = new RowStyle(SizeType.Absolute, 250);
-        // Shrink grid row to compensate (give it the rest)
         outer.RowStyles[1] = new RowStyle(SizeType.Percent, 100);
 
         var formWrap = new Panel { Dock = DockStyle.Fill,
@@ -203,15 +184,9 @@ public class ContentManagerPage : Form, TuioListener
             Font = new Font("Segoe UI", 9), ForeColor = TXT,
             AutoSize = false, BackColor = Color.Transparent };
 
-        // ── Buttons ───────────────────────────────────────────────────────
-        _uBtnAdd   = MkBtn("➕ Add User",    Color.FromArgb(26, 130, 60),  130, 32);
-        _uBtnSave  = MkBtn("💾 Save/Update", ACCENT,                       130, 32);
-        _uBtnDeact = MkBtn("⏸ Deactivate",  Color.FromArgb(170, 100, 14), 120, 32);
-        _uBtnDel   = MkBtn("🗑 Delete",       Color.FromArgb(175, 35, 35),  100, 32);
-        _uBtnClr   = MkBtn("✖ Clear",         Color.FromArgb(60, 68, 100),  90, 32);
-        _uBtnAdd.Click += OnUserAdd; _uBtnSave.Click += OnUserSave;
-        _uBtnDeact.Click += OnUserDeact; _uBtnDel.Click += OnUserDel;
-        _uBtnClr.Click += (s, e) => ClearUserForm();
+        // ── Buttons removed — TUIO marker actions only ────────────────────
+        // Fields still referenced by DispatchMarker; no click handlers needed.
+        _uBtnAdd = _uBtnSave = _uBtnDeact = _uBtnDel = _uBtnClr = null;
 
         // ── Build a single TableLayoutPanel: 7 rows × 3 cols ─────────────
         // row 0 = title (spans 3 cols)
@@ -296,19 +271,46 @@ public class ContentManagerPage : Form, TuioListener
         // Row 6: inputs
         I(_uBt, 0, 6); I(_uFace, 1, 6); I(_uActive, 2, 6);
 
-        // Row 7: buttons spanning all 3 columns
-        var btnFlow = new FlowLayoutPanel {
+        // Row 7: marker instruction cards (spans 3 cols) — no buttons
+        var markerFlow = new FlowLayoutPanel {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false, BackColor = Color.Transparent,
-            Margin = new Padding(2, 6, 0, 0) };
-        foreach (var b in new[] { _uBtnAdd, _uBtnSave, _uBtnDeact, _uBtnDel, _uBtnClr }) {
-            b.Font = new Font("Segoe UI", 9, FontStyle.Bold);
-            b.Margin = new Padding(0, 0, 8, 0);
-            btnFlow.Controls.Add(b);
+            Margin = new Padding(2, 4, 0, 0) };
+
+        var markerDefs = new (string Id, string Action, Color Clr)[] {
+            ("31", "Add",        Color.FromArgb(26, 130, 60)),
+            ("32", "Save",       ACCENT),
+            ("33", "Deactivate", Color.FromArgb(170, 100, 14)),
+            ("34", "Delete",     Color.FromArgb(175, 35, 35)),
+            ("35", "Clear",      Color.FromArgb(60, 68, 100)),
+            ("36", "↻ Select",   Color.FromArgb(80, 140, 220)),
+            ("20", "Back",       Color.FromArgb(100, 60, 100)),
+        };
+        foreach (var (mid, action, clr) in markerDefs)
+        {
+            var card = new Panel {
+                Size = new Size(82, 34), BackColor = Color.FromArgb(22, 32, 58),
+                Margin = new Padding(0, 0, 5, 0), Cursor = Cursors.Default };
+            card.Paint += (s, e) => {
+                var g = e.Graphics;
+                using (var pen = new System.Drawing.Pen(clr, 1.2f))
+                    g.DrawRectangle(pen, 0, 0, card.Width - 1, card.Height - 1);
+                using (var b = new System.Drawing.SolidBrush(clr))
+                    g.FillRectangle(b, 0, 0, card.Width, 4);
+            };
+            card.Controls.Add(new Label {
+                Text = $"M{mid}", Font = new Font("Segoe UI", 8, FontStyle.Bold),
+                ForeColor = clr, BackColor = Color.Transparent,
+                Location = new Point(4, 5), AutoSize = true });
+            card.Controls.Add(new Label {
+                Text = action, Font = new Font("Segoe UI", 8),
+                ForeColor = TXT, BackColor = Color.Transparent,
+                Location = new Point(4, 18), AutoSize = true });
+            markerFlow.Controls.Add(card);
         }
-        tbl.Controls.Add(btnFlow, 0, 7);
-        tbl.SetColumnSpan(btnFlow, 3);
+        tbl.Controls.Add(markerFlow, 0, 7);
+        tbl.SetColumnSpan(markerFlow, 3);
 
         formWrap.Controls.Add(tbl);
     }
@@ -807,12 +809,122 @@ public class ContentManagerPage : Form, TuioListener
     // ── TUIO ──────────────────────────────────────────────────────────────
     private void OnGesture(int id) {
         if (!Visible || IsDisposed) return;
-        if (id == 20) BeginInvoke((MethodInvoker)Close);
+        BeginInvoke((MethodInvoker)(() => DispatchMarker(id)));
     }
+
     public void addTuioObject(TuioObject o)
-    { if (o.SymbolID == 20) BeginInvoke((MethodInvoker)Close); }
-    public void updateTuioObject(TuioObject o) { }
-    public void removeTuioObject(TuioObject o) { }
+    {
+        if (!IsHandleCreated || IsDisposed) return;
+        BeginInvoke((MethodInvoker)(() => DispatchMarker(o.SymbolID)));
+    }
+
+    /// <summary>
+    /// updateTuioObject fires continuously while a marker is on the table.
+    /// We use it to track Marker 36 rotation for user selection.
+    /// </summary>
+    public void updateTuioObject(TuioObject o)
+    {
+        if (o.SymbolID != 36) return;
+        if (!IsHandleCreated || IsDisposed) return;
+
+        float angle = o.Angle;   // radians, 0..2π
+        BeginInvoke((MethodInvoker)(() => HandleMarker36Rotation(angle)));
+    }
+
+    private void HandleMarker36Rotation(float angle)
+    {
+        // Debounce: skip if moved too recently
+        if ((DateTime.Now - _marker36LastMove).TotalMilliseconds < 350) return;
+
+        if (float.IsNaN(_marker36LastAngle))
+        {
+            // First detection — just record angle, don't move yet
+            _marker36LastAngle = angle;
+            return;
+        }
+
+        // Compute signed angular delta (handle wrap-around at 0/2π)
+        float delta = angle - _marker36LastAngle;
+        if (delta >  (float)Math.PI) delta -= 2f * (float)Math.PI;
+        if (delta < -(float)Math.PI) delta += 2f * (float)Math.PI;
+
+        if (Math.Abs(delta) < ROTATION_THRESHOLD) return;
+
+        // delta > 0 = clockwise = next user; delta < 0 = counter-clockwise = previous
+        int direction = delta > 0 ? 1 : -1;
+        _marker36LastAngle = angle;
+        _marker36LastMove  = DateTime.Now;
+
+        MoveUserSelection(direction);
+    }
+
+    private void MoveUserSelection(int direction)
+    {
+        if (_uGrid == null || _uGrid.Rows.Count == 0) return;
+
+        int current = _uGrid.SelectedRows.Count > 0
+            ? _uGrid.SelectedRows[0].Index
+            : -1;
+
+        int next = current + direction;
+        next = Math.Max(0, Math.Min(_uGrid.Rows.Count - 1, next));
+
+        if (next == current) return;
+
+        _uGrid.ClearSelection();
+        _uGrid.Rows[next].Selected = true;
+        _uGrid.FirstDisplayedScrollingRowIndex = next;
+        Console.WriteLine($"[ContentManager] Marker 36 → row {next}");
+    }
+
+    private void DispatchMarker(int id)
+    {
+        Console.WriteLine($"[ContentManager] Marker {id} detected");
+
+        // Marker 36 handled via updateTuioObject rotation — reset angle on add
+        if (id == 36) { _marker36LastAngle = float.NaN; return; }
+
+        // Marker 20 = Back (no cooldown needed)
+        if (id == 20) { Close(); return; }
+
+        // Action markers 31-35: debounce
+        bool sameCooldown = id == _lastActionMarker &&
+            (DateTime.Now - _lastActionTime).TotalMilliseconds < ACTION_COOLDOWN_MS;
+        if (sameCooldown) return;
+        _lastActionMarker = id;
+        _lastActionTime   = DateTime.Now;
+
+        switch (id)
+        {
+            case 31:
+                Console.WriteLine("[ContentManager] Marker 31 → Add User");
+                OnUserAdd(this, EventArgs.Empty);
+                break;
+            case 32:
+                Console.WriteLine("[ContentManager] Marker 32 → Save/Update User");
+                OnUserSave(this, EventArgs.Empty);
+                break;
+            case 33:
+                Console.WriteLine("[ContentManager] Marker 33 → Deactivate User");
+                OnUserDeact(this, EventArgs.Empty);
+                break;
+            case 34:
+                Console.WriteLine("[ContentManager] Marker 34 → Delete User");
+                OnUserDel(this, EventArgs.Empty);
+                break;
+            case 35:
+                Console.WriteLine("[ContentManager] Marker 35 → Clear Form");
+                ClearUserForm();
+                break;
+        }
+    }
+
+    public void removeTuioObject(TuioObject o)
+    {
+        // Reset marker 36 angle when it leaves the table
+        if (o.SymbolID == 36) _marker36LastAngle = float.NaN;
+    }
+
     public void addTuioCursor(TuioCursor c)    { }
     public void updateTuioCursor(TuioCursor c) { }
     public void removeTuioCursor(TuioCursor c) { }
