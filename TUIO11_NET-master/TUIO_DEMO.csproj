@@ -51,11 +51,18 @@
   -->
   <ItemGroup>
     <Compile Include="AIVisionCoachPage.cs" />
+    <Compile Include="AdminDashboardPage.cs" />
     <Compile Include="AnalyticsEngine.cs" />
     <Compile Include="CompetitionMode.cs" />
+    <Compile Include="ContentManagerPage.cs" />
+    <Compile Include="ContentService.cs" />
     <Compile Include="FaceIDClient.cs" />
     <Compile Include="GazeClient.cs" />
     <Compile Include="GestureClient.cs" />
+    <Compile Include="PadelContentItem.cs" />
+    <Compile Include="SystemStatusPage.cs" />
+    <Compile Include="TestLevelsPage.cs" />
+    <Compile Include="TestMarkersPage.cs" />
     <Compile Include="OSC.NET\OSCBundle.cs" />
     <Compile Include="OSC.NET\OSCMessage.cs" />
     <Compile Include="OSC.NET\OSCPacket.cs" />
@@ -72,6 +79,7 @@
     <Compile Include="OSC.NET\OSCTimeTag.cs" />
     <Compile Include="TUIO\TuioBlob.cs" />
     <Compile Include="UserData.cs" />
+    <Compile Include="UserService.cs" />
     <Compile Include="UserLoader.cs" />
     <Compile Include="WordItemData.cs" />
   </ItemGroup>
@@ -100,6 +108,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="Data\users.json">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
+    <None Include="Data\padel_content.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="packages.config" />

@@ -18,13 +18,15 @@ namespace TuioDemo
 
     public class UserData
     {
-        public string UserId { get; set; }
-        public string BluetoothId { get; set; }    
-        public string FaceId { get; set; }
-        public string Name { get; set; }
-        public string Gender { get; set; }
-        public int Age { get; set; }
-        public string Level { get; set; }
-        public GazeProfile GazeProfile { get; set; }
+        public string UserId      { get; set; } = "";
+        public string BluetoothId { get; set; } = "";
+        public string FaceId      { get; set; } = "";
+        public string Name        { get; set; } = "";
+        public string Gender      { get; set; } = "";
+        public int    Age         { get; set; } = 0;
+        public string Level       { get; set; } = "";
+        public string Role        { get; set; } = "Player";   // Player | Admin
+        public bool   IsActive    { get; set; } = true;
+        public GazeProfile GazeProfile { get; set; } = new GazeProfile();
     }
 }

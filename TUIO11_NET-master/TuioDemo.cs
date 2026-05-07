@@ -621,6 +621,10 @@ public class HomePage : Form, TuioListener
 
     private bool isScanningBluetooth = false;
 
+    // ── Admin Bluetooth MAC ───────────────────────────────────────────────
+    private const string ADMIN_BLUETOOTH_MAC = "E8:3A:12:40:1A:70";
+    private bool _adminPageOpen = false;
+
     // ── Face Recognition ──────────────────────────────────
     private FaceIDClient _faceIDClient;
     private System.Windows.Forms.Timer _faceReconnectTimer;
@@ -823,19 +827,101 @@ public class HomePage : Form, TuioListener
     {
         string path = Path.Combine(Application.StartupPath, "Data", "users.json");
 
-        if (!File.Exists(path))
-            return new List<UserData>();
+        try
+        {
+            if (!File.Exists(path))
+                return new List<UserData>();
 
-        string json = File.ReadAllText(path);
-        return JsonConvert.DeserializeObject<List<UserData>>(json);
+            string json = File.ReadAllText(path).Trim();
+            if (string.IsNullOrEmpty(json) || json == "[]")
+                return new List<UserData>();
+
+            var list = JsonConvert.DeserializeObject<List<UserData>>(json)
+                       ?? new List<UserData>();
+
+            // Assign stable deterministic UserId to users that lack one
+            foreach (var u in list.Where(u => string.IsNullOrEmpty(u.UserId)))
+            {
+                string key = (u.Name ?? "") + "|" + (u.BluetoothId ?? "") + "|" + (u.FaceId ?? "");
+                u.UserId = "usr_" + Math.Abs(key.GetHashCode()).ToString("x8");
+            }
+
+            BtLog($"LoadUsers path={path} count={list.Count}");
+            return list;
+        }
+        catch (Exception ex)
+        {
+            BtLog($"LoadUsers ERROR: {ex.Message}");
+            return new List<UserData>();
+        }
     }
 
     private UserData GetUserByBluetoothId(string bluetoothId)
     {
-        return cachedUsers.FirstOrDefault(u =>
-            string.Equals(u.BluetoothId?.Trim(), bluetoothId?.Trim(), StringComparison.OrdinalIgnoreCase));
+        // Always reload from disk so Admin Management edits are picked up immediately
+        cachedUsers = LoadUsersFromJson();
+
+        string normalizedInput = NormalizeMac(bluetoothId);
+        BtLog($"GetUserByBT raw={bluetoothId} normalized={normalizedInput} totalUsers={cachedUsers.Count}");
+
+        foreach (var u in cachedUsers)
+        {
+            string normalizedStored = NormalizeMac(u.BluetoothId);
+            BtLog($"  checking user={u.Name} storedBT={u.BluetoothId} normalized={normalizedStored} role={u.Role} active={u.IsActive}");
+
+            if (normalizedStored == normalizedInput)
+            {
+                BtLog($"  MATCH found: {u.Name} role={u.Role} active={u.IsActive}");
+
+                // Inactive users cannot log in
+                if (!u.IsActive)
+                {
+                    BtLog($"  BLOCKED: user is inactive");
+                    return null;
+                }
+
+                // Admin-role users are handled separately via ADMIN_BLUETOOTH_MAC check
+                // If somehow an admin-role user has a different MAC, still block player flow
+                if (string.Equals(u.Role, "Admin", StringComparison.OrdinalIgnoreCase))
+                {
+                    BtLog($"  BLOCKED: user has Admin role — handled by admin flow");
+                    return null;
+                }
+
+                return u;
+            }
+        }
+
+        BtLog($"  NO MATCH for {normalizedInput}");
+        return null;
     }
 
+    /// <summary>
+    /// Normalizes a Bluetooth MAC address: removes colons, dashes, spaces, converts to uppercase.
+    /// E8:C2:DD:1A:36:60 == e8-c2-dd-1a-36-60 == E8C2DD1A3660
+    /// </summary>
+    private static string NormalizeMac(string mac)
+    {
+        if (string.IsNullOrWhiteSpace(mac)) return "";
+        return mac.Replace(":", "").Replace("-", "").Replace(" ", "").ToUpperInvariant();
+    }
+
+    private static void BtLog(string msg)
+    {
+        try
+        {
+            string logPath = Path.Combine(Application.StartupPath, "bluetooth_login_debug_log.txt");
+            File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {msg}\n");
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// Scans Bluetooth devices and returns the first matching MAC.
+    /// Returns ADMIN_BLUETOOTH_MAC if the admin device is found (checked first).
+    /// Returns a player MAC if a known player device is found.
+    /// Returns "" if nothing is found or scan fails.
+    /// </summary>
     private string GetCurrentBluetoothId()
     {
         try
@@ -843,19 +929,30 @@ public class HomePage : Form, TuioListener
             using (BluetoothClient btClient = new BluetoothClient())
             {
                 var devices = btClient.DiscoverDevices();
+                cachedUsers = LoadUsersFromJson();
 
                 foreach (var device in devices)
                 {
                     string formattedMac = FormatBluetoothAddress(device.DeviceAddress.ToString());
-                    var user = GetUserByBluetoothId(formattedMac);
+                    string normalizedMac = NormalizeMac(formattedMac);
+                    BtLog($"Scan found device={device.DeviceName} mac={formattedMac} normalized={normalizedMac}");
 
-                    if (user != null)
+                    // Match against users.json — role determines routing
+                    var matched = cachedUsers.FirstOrDefault(u =>
+                        !string.IsNullOrEmpty(u.BluetoothId) &&
+                        NormalizeMac(u.BluetoothId) == normalizedMac);
+
+                    if (matched != null)
+                    {
+                        BtLog($"MAC matched user={matched.Name} role={matched.Role} active={matched.IsActive}");
                         return formattedMac;
+                    }
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
+            BtLog($"GetCurrentBluetoothId ERROR: {ex.Message}");
         }
 
         return "";
@@ -863,7 +960,7 @@ public class HomePage : Form, TuioListener
 
     private async void CheckBluetoothAndLogin()
     {
-        if (pageOpen) return;
+        if (pageOpen || _adminPageOpen) return;
         if (currentUser != null) return;
         if (isScanningBluetooth) return;
 
@@ -881,15 +978,64 @@ public class HomePage : Form, TuioListener
                 return;
             }
 
-            currentUser = GetUserByBluetoothId(bluetoothId);
+            // ── Route by Role from users.json ────────────────────────────
+            cachedUsers = LoadUsersFromJson();
+            var matchedUser = cachedUsers.FirstOrDefault(u =>
+                !string.IsNullOrEmpty(u.BluetoothId) &&
+                NormalizeMac(u.BluetoothId) == NormalizeMac(bluetoothId));
 
-            if (currentUser == null)
+            if (matchedUser == null)
             {
                 lblFooter.Text = "Device detected, but player profile was not found.";
+                BtLog($"No user found for MAC {bluetoothId}");
                 return;
             }
 
-            lblFooter.Text = "Player detected: " + currentUser.Name;
+            if (!matchedUser.IsActive)
+            {
+                lblFooter.Text = $"User '{matchedUser.Name}' is inactive. Contact admin.";
+                BtLog($"Login blocked: {matchedUser.Name} is inactive");
+                return;
+            }
+
+            BtLog($"Routing: name={matchedUser.Name} role={matchedUser.Role} level={matchedUser.Level}");
+
+            // ── Admin ─────────────────────────────────────────────────────
+            if (string.Equals(matchedUser.Role, "Admin", StringComparison.OrdinalIgnoreCase))
+            {
+                _adminPageOpen = true;
+                _bluetoothTimer.Stop();
+
+                lblFooter.Text      = "Admin device detected — opening Admin Dashboard...";
+                lblInstruction.Text = $"Welcome {matchedUser.Name}";
+                BtLog($"Opening AdminDashboardPage for {matchedUser.Name}");
+
+                var adminPage = new AdminDashboardPage(
+                    tuioClient:   client,
+                    adminName:    matchedUser.Name,
+                    btConnected:  true,
+                    gestureRef:   _gestureClient,
+                    faceRef:      _faceIDClient,
+                    gazeRef:      null);
+
+                adminPage.FormClosed += (s, e) =>
+                {
+                    _adminPageOpen = false;
+                    lblInstruction.Text = "Waiting to detect your player level automatically...";
+                    lblFooter.Text      = "Scanning for player...";
+                    this.Show();
+                    StartFaceScanWindow();
+                };
+
+                adminPage.Show();
+                this.Hide();
+                return;
+            }
+
+            // ── Player ────────────────────────────────────────────────────
+            currentUser = matchedUser;
+
+            lblFooter.Text      = "Player detected: " + currentUser.Name;
             lblInstruction.Text = MapDetectedPlayerLevel(currentUser.Level);
 
             pageOpen = true;
@@ -903,7 +1049,7 @@ public class HomePage : Form, TuioListener
                 currentUser = null;
                 _faceLoginCompleted = false;
                 lblInstruction.Text = "Waiting to detect your player level automatically...";
-                lblFooter.Text = "Scanning for player...";
+                lblFooter.Text      = "Scanning for player...";
                 this.Show();
                 // Restart face scan first, then Bluetooth fallback after 5 s
                 StartFaceScanWindow();
@@ -1511,6 +1657,28 @@ public class HomePage : Form, TuioListener
     {
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
+
+        // Catch any unhandled UI-thread exception and log it before showing the dialog
+        Application.ThreadException += (s, e) =>
+        {
+            try
+            {
+                string logPath = System.IO.Path.Combine(
+                    AppDomain.CurrentDomain.BaseDirectory, "content_manager_error_log.txt");
+                string entry =
+                    $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] UNHANDLED THREAD EXCEPTION\n" +
+                    $"Type:    {e.Exception.GetType().FullName}\n" +
+                    $"Message: {e.Exception.Message}\n" +
+                    $"Stack:\n{e.Exception.StackTrace}\n" +
+                    (e.Exception.InnerException != null
+                        ? $"Inner: {e.Exception.InnerException.Message}\n{e.Exception.InnerException.StackTrace}\n"
+                        : "") +
+                    new string('-', 60) + "\n";
+                System.IO.File.AppendAllText(logPath, entry);
+            }
+            catch { }
+        };
+
         Application.Run(new HomePage(3333));
     }
 

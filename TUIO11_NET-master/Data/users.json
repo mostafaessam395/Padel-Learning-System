@@ -1,25 +1,14 @@
 [
   {
+    "UserId": "admin_001",
     "BluetoothId": "E8:3A:12:40:1A:70",
-    "Name": "MOSTAFA_ESSAM",
+    "FaceId": "",
+    "Name": "Admin",
     "Gender": "Male",
     "Age": 21,
-    "Level": "HighSchool",
-    "GazeProfile": {
-      "Strokes_Score": 75,
-      "Rules_Score": 20,
-      "Practice_Score": 60,
-      "Quiz_Score": 50,
-      "Spelling_Score": 35,
-      "Competition_Score": 80
-    }
-  },
-  {
-    "BluetoothId": "D8:8A:DC:DE:C8:76",
-    "Name": "Mostafa",
-    "Gender": "Male",
-    "Age": 21,
-    "Level": "HighSchool",
+    "Level": "Advanced",
+    "Role": "Admin",
+    "IsActive": true,
     "GazeProfile": {
       "Strokes_Score": 50,
       "Rules_Score": 50,
@@ -30,11 +19,53 @@
     }
   },
   {
+    "UserId": "usr_17b27fed",
+    "BluetoothId": "e8:c2:dd:1a:36:61",
+    "FaceId": "",
+    "Name": "MOSTAFA_ESSAM",
+    "Gender": "Male",
+    "Age": 21,
+    "Level": "HighSchool",
+    "Role": "Player",
+    "IsActive": true,
+    "GazeProfile": {
+      "Strokes_Score": 75,
+      "Rules_Score": 20,
+      "Practice_Score": 60,
+      "Quiz_Score": 50,
+      "Spelling_Score": 35,
+      "Competition_Score": 80
+    }
+  },
+  {
+    "UserId": "usr_2c21bf2b",
+    "BluetoothId": "D8:8A:DC:DE:C8:76",
+    "FaceId": "",
+    "Name": "Mostafa",
+    "Gender": "Male",
+    "Age": 21,
+    "Level": "HighSchool",
+    "Role": "Player",
+    "IsActive": true,
+    "GazeProfile": {
+      "Strokes_Score": 50,
+      "Rules_Score": 50,
+      "Practice_Score": 50,
+      "Quiz_Score": 50,
+      "Spelling_Score": 50,
+      "Competition_Score": 50
+    }
+  },
+  {
+    "UserId": "usr_0ac81a8c",
+    "BluetoothId": "",
+    "FaceId": "Shahd",
     "Name": "Shahd",
     "Gender": "Female",
     "Age": 21,
     "Level": "Primary",
-    "FaceId": "Shahd",
+    "Role": "Player",
+    "IsActive": true,
     "GazeProfile": {
       "Strokes_Score": 50,
       "Rules_Score": 15,
