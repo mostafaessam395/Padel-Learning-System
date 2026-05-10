@@ -53,9 +53,11 @@
     <Compile Include="AIVisionCoachPage.cs" />
     <Compile Include="AdminDashboardPage.cs" />
     <Compile Include="AnalyticsEngine.cs" />
+    <Compile Include="AdaptiveUIHelper.cs" />
     <Compile Include="CompetitionMode.cs" />
     <Compile Include="ContentManagerPage.cs" />
     <Compile Include="ContentService.cs" />
+    <Compile Include="ExpressionClient.cs" />
     <Compile Include="FaceIDClient.cs" />
     <Compile Include="GazeClient.cs" />
     <Compile Include="GestureClient.cs" />

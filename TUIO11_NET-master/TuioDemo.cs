@@ -616,6 +616,7 @@ public class HomePage : Form, TuioListener
     private List<UserData> cachedUsers = new List<UserData>();
 
     private GestureClient _gestureClient;
+    private ExpressionClient _expressionClient;
     private System.Windows.Forms.Timer _reconnectTimer;
     private bool _isProcessingGesture = false;
 
@@ -679,6 +680,7 @@ public class HomePage : Form, TuioListener
         client.connect();
 
         InitializeGestureClient();
+        InitializeExpressionClient();
         InitializeFaceID();
 
         _bookTimer = new System.Windows.Forms.Timer { Interval = 40 };
@@ -1698,6 +1700,7 @@ public class HomePage : Form, TuioListener
         _reconnectTimer?.Stop();
         _reconnectTimer?.Dispose();
         _gestureClient?.Disconnect();
+        _expressionClient?.Disconnect();
         GestureRouter.OnGestureMarker -= HandleGestureMarker;
 
         // Face ID cleanup
@@ -1736,6 +1739,20 @@ public class HomePage : Form, TuioListener
                 ConnectGestureWithRetry();
         };
         _reconnectTimer.Start();
+    }
+
+    private void InitializeExpressionClient()
+    {
+        _expressionClient = new ExpressionClient();
+        _expressionClient.Connect("127.0.0.1", 5005);
+
+        var exprTimer = new System.Windows.Forms.Timer { Interval = 3000 };
+        exprTimer.Tick += (s, e) =>
+        {
+            if (_expressionClient != null && !_expressionClient.IsConnected)
+                _expressionClient.Connect("127.0.0.1", 5005);
+        };
+        exprTimer.Start();
     }
 
     private void ConnectGestureWithRetry()
@@ -2115,6 +2132,10 @@ public class LearningPage : Form, TuioListener
     private bool lessonOpen = false;
     private int lastLessonSymbolID = -1;
 
+    // Happy background mode — set by AdaptiveUIHelper when sad/bored detected
+    internal static bool HappyModeActive = false;
+    private static Image _happyBgImage = null;
+
     // ── Debounce: prevent same marker firing twice within 2 seconds ──
     private DateTime _lastMarkerTime = DateTime.MinValue;
     private int _lastMarkerDebounce = -1;
@@ -2214,6 +2235,9 @@ public class LearningPage : Form, TuioListener
         // Subscribe to gesture router
         this.Shown += (s, e) => { GestureRouter.OnGestureMarker += HandleGestureMarker; };
         this.FormClosed += (s, e) => { GestureRouter.OnGestureMarker -= HandleGestureMarker; };
+
+        // Subscribe to expression-based adaptive UI (happy2.jpg bg + music)
+        AdaptiveUIHelper.Register(this);
 
         // ── Initialize Gaze Tracking & Adaptive UI ──
         InitializeGazeTracking();
@@ -3042,33 +3066,55 @@ public class LearningPage : Form, TuioListener
     {
         Graphics g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        long tick = DateTime.Now.Ticks / 200000L;
-        float phase = (float)(tick % 628) / 100f; // 0..2PI
-        float pulse = 1f + 0.08f * (float)Math.Sin(phase);
 
-        if (IsPrimary())
+        if (HappyModeActive)
         {
-            using (LinearGradientBrush brush = new LinearGradientBrush(
-                this.ClientRectangle,
-                Color.FromArgb(236, 247, 255), Color.FromArgb(210, 236, 255), 90f))
-                g.FillRectangle(brush, this.ClientRectangle);
-            DrawPrimaryDecorations(g, pulse);
-        }
-        else if (IsSecondary())
-        {
-            using (LinearGradientBrush brush = new LinearGradientBrush(
-                this.ClientRectangle,
-                Color.FromArgb(230, 250, 250), Color.FromArgb(200, 238, 235), 90f))
-                g.FillRectangle(brush, this.ClientRectangle);
-            DrawSecondaryDecorations(g, pulse);
+            // ── Happy mode: draw happy2.jpg as full background, no circles ──
+            if (_happyBgImage == null)
+            {
+                string path = @"C:\Users\agmail\Desktop\padel proj\Padel-Learning-System-1\TUIO11_NET-master\bin\Debug\happy2.jpg";
+                if (!File.Exists(path)) path = Path.Combine(Application.StartupPath, "happy2.jpg");
+                if (File.Exists(path))
+                {
+                    _happyBgImage = Image.FromFile(path);
+                    Console.WriteLine("[LearningPage] happy2.jpg loaded for OnPaint.");
+                }
+            }
+            if (_happyBgImage != null)
+                g.DrawImage(_happyBgImage, 0, 0, this.ClientSize.Width, this.ClientSize.Height);
+            else
+                g.Clear(Color.FromArgb(255, 145, 70)); // vivid orange fallback
         }
         else
         {
-            using (LinearGradientBrush brush = new LinearGradientBrush(
-                this.ClientRectangle,
-                Color.FromArgb(238, 234, 252), Color.FromArgb(218, 210, 245), 90f))
-                g.FillRectangle(brush, this.ClientRectangle);
-            DrawHighSchoolDecorations(g, pulse);
+            long tick = DateTime.Now.Ticks / 200000L;
+            float phase = (float)(tick % 628) / 100f;
+            float pulse = 1f + 0.08f * (float)Math.Sin(phase);
+
+            if (IsPrimary())
+            {
+                using (LinearGradientBrush brush = new LinearGradientBrush(
+                    this.ClientRectangle,
+                    Color.FromArgb(236, 247, 255), Color.FromArgb(210, 236, 255), 90f))
+                    g.FillRectangle(brush, this.ClientRectangle);
+                DrawPrimaryDecorations(g, pulse);
+            }
+            else if (IsSecondary())
+            {
+                using (LinearGradientBrush brush = new LinearGradientBrush(
+                    this.ClientRectangle,
+                    Color.FromArgb(230, 250, 250), Color.FromArgb(200, 238, 235), 90f))
+                    g.FillRectangle(brush, this.ClientRectangle);
+                DrawSecondaryDecorations(g, pulse);
+            }
+            else
+            {
+                using (LinearGradientBrush brush = new LinearGradientBrush(
+                    this.ClientRectangle,
+                    Color.FromArgb(238, 234, 252), Color.FromArgb(218, 210, 245), 90f))
+                    g.FillRectangle(brush, this.ClientRectangle);
+                DrawHighSchoolDecorations(g, pulse);
+            }
         }
 
         base.OnPaint(e);
@@ -3574,6 +3620,10 @@ public class LessonPage : Form, TuioListener
     private int controlMarkerId;
     private string lessonTitle;
 
+    // Happy background mode — set by AdaptiveUIHelper when sad/bored detected
+    internal static bool HappyModeActive = false;
+    private static Image _happyBgImage = null;
+
     private Label lblHeader;
     private Label lblWord;
     private Label lblMeaning;
@@ -3709,6 +3759,103 @@ public class LessonPage : Form, TuioListener
         // Subscribe to gesture router
         this.Shown += (s, e) => { GestureRouter.OnGestureMarker += HandleGestureMarker; };
         this.FormClosed += (s, e) => { GestureRouter.OnGestureMarker -= HandleGestureMarker; };
+
+        // Subscribe to expression router for panel color updates
+        // NOTE: music is handled exclusively by AdaptiveUIHelper — no PlayBackgroundMusic here
+        this.Shown += (s, e) => { ExpressionRouter.OnEmotionDetected += HandleEmotion; };
+        this.FormClosed += (s, e) => { ExpressionRouter.OnEmotionDetected -= HandleEmotion; };
+
+        // Register shared adaptive UI helper (handles background + music)
+        AdaptiveUIHelper.Register(this);
+    }
+
+    [System.Runtime.InteropServices.DllImport("winmm.dll")]
+    private static extern long mciSendString(string strCommand, StringBuilder strReturn, int iReturnLength, IntPtr hwndCallback);
+
+
+
+    private void HandleEmotion(string emotion)
+    {
+        Console.WriteLine($"[LessonPage.HandleEmotion] emotion={emotion}");
+        // Panel color updates only — music is handled by AdaptiveUIHelper
+        if (emotion == "sad" || emotion == "bored" || emotion == "uncomfortable")
+        {
+            try
+            {
+                if (this.IsHandleCreated && !this.IsDisposed)
+                {
+                    this.BeginInvoke((MethodInvoker)delegate
+                    {
+                        try
+                        {
+                            var panelColors = new Color[]
+                            {
+                                Color.FromArgb(140, 255, 230, 240), // soft pink
+                                Color.FromArgb(140, 200, 255, 220), // mint green
+                                Color.FromArgb(140, 200, 230, 255), // sky blue
+                            };
+                            int idx = 0;
+                            foreach (Control ctrl in this.Controls)
+                            {
+                                if (ctrl is RoundedShadowPanel rsp)
+                                {
+                                    rsp.FillColor = panelColors[idx % panelColors.Length];
+                                    rsp.Invalidate();
+                                    idx++;
+                                }
+                            }
+                            this.Refresh();
+                        }
+                        catch (Exception ex2) { Console.WriteLine("[HandleEmotion] " + ex2.Message); }
+                    });
+                }
+            }
+            catch (Exception ex) { Console.WriteLine("[HandleEmotion] Invoke error: " + ex.Message); }
+        }
+    }
+
+    private void PlayBackgroundMusic()
+    {
+        try
+        {
+            // Search Data folder for any MP3
+            string[] searchDirs = new[]
+            {
+                Path.Combine(Application.StartupPath, "Data"),
+                Application.StartupPath,
+            };
+
+            string mp3 = null;
+            foreach (var dir in searchDirs)
+            {
+                if (!Directory.Exists(dir)) continue;
+                var files = Directory.GetFiles(dir, "*.mp3");
+                if (files.Length > 0) { mp3 = files[0]; break; }
+            }
+
+            if (mp3 != null)
+            {
+                Console.WriteLine($"[Music] Playing MP3: {mp3}");
+                mciSendString("close calmMusic", null, 0, IntPtr.Zero);
+                mciSendString($"open \"{mp3}\" type mpegvideo alias calmMusic", null, 0, IntPtr.Zero);
+                mciSendString("play calmMusic repeat", null, 0, IntPtr.Zero);
+            }
+            else
+            {
+                Console.WriteLine("[Music] No MP3 found in Data folder. Please add a calm.mp3 file there.");
+            }
+        }
+        catch (Exception ex) { Console.WriteLine("[Music] Error: " + ex.Message); }
+    }
+
+    private void StopBackgroundMusic()
+    {
+        try
+        {
+            mciSendString("stop calmMusic", null, 0, IntPtr.Zero);
+            mciSendString("close calmMusic", null, 0, IntPtr.Zero);
+        }
+        catch { }
     }
 
     private bool IsArrangementLesson()
@@ -4538,7 +4685,25 @@ public class LessonPage : Form, TuioListener
         Graphics g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
-        if (IsArrangementLesson())
+        if (HappyModeActive)
+        {
+            // Happy mode: draw happy2.jpg as full-screen background, skip circles
+            if (_happyBgImage == null)
+            {
+                string path = @"C:\Users\agmail\Desktop\padel proj\Padel-Learning-System-1\TUIO11_NET-master\bin\Debug\happy2.jpg";
+                if (!File.Exists(path)) path = Path.Combine(Application.StartupPath, "happy2.jpg");
+                if (File.Exists(path))
+                {
+                    _happyBgImage = Image.FromFile(path);
+                    Console.WriteLine("[LessonPage] happy2.jpg loaded.");
+                }
+            }
+            if (_happyBgImage != null)
+                g.DrawImage(_happyBgImage, 0, 0, this.ClientSize.Width, this.ClientSize.Height);
+            else
+                g.Clear(Color.FromArgb(255, 145, 70));
+        }
+        else if (IsArrangementLesson())
         {
             using (LinearGradientBrush brush = new LinearGradientBrush(
                 this.ClientRectangle,
@@ -4548,7 +4713,6 @@ public class LessonPage : Form, TuioListener
             {
                 g.FillRectangle(brush, this.ClientRectangle);
             }
-
             DrawArrangementDecorations(g);
         }
         else
@@ -4561,7 +4725,6 @@ public class LessonPage : Form, TuioListener
             {
                 g.FillRectangle(brush, this.ClientRectangle);
             }
-
             DrawDecorations(g);
         }
 

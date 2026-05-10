@@ -1,7 +1,7 @@
 [
   {
     "UserId": "admin_001",
-    "BluetoothId": "0C:2F:B0:98:58:51",
+    "BluetoothId": "",
     "FaceId": "",
     "Name": "Admin",
     "Gender": "Male",
@@ -20,7 +20,7 @@
   },
   {
     "UserId": "usr_17b27fed",
-    "BluetoothId": "",
+    "BluetoothId": "0C:2F:B0:98:58:51",
     "FaceId": "",
     "Name": "antony",
     "Gender": "Male",
