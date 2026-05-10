@@ -285,6 +285,7 @@ public class ContentManagerPage : Form, TuioListener
             ("34", "Delete",     Color.FromArgb(175, 35, 35)),
             ("35", "Clear",      Color.FromArgb(60, 68, 100)),
             ("36", "↻ Select",   Color.FromArgb(80, 140, 220)),
+            ("37", "Gaze Hist.", Color.FromArgb(0, 190, 160)),
             ("20", "Back",       Color.FromArgb(100, 60, 100)),
         };
         foreach (var (mid, action, clr) in markerDefs)
@@ -916,7 +917,187 @@ public class ContentManagerPage : Form, TuioListener
                 Console.WriteLine("[ContentManager] Marker 35 → Clear Form");
                 ClearUserForm();
                 break;
+            case 37:
+                Console.WriteLine("[ContentManager] Marker 37 → Show Gaze History");
+                ShowGazeHistory();
+                break;
         }
+    }
+
+    /// <summary>
+    /// Opens a popup showing the last 5 gaze session reports for the selected user.
+    /// Triggered by Marker 37 in the admin Users tab.
+    /// </summary>
+    private void ShowGazeHistory()
+    {
+        // Get selected user
+        if (_uGrid == null || _uGrid.SelectedRows.Count == 0)
+        {
+            MessageBox.Show("Select a user first (rotate Marker 36).",
+                "Gaze History", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        int idx = _uGrid.SelectedRows[0].Index;
+        if (idx < 0 || idx >= _uItems.Count) return;
+        var user = _uItems[idx];
+
+        var sessions = GazeReportService.GetRecent(user.UserId, 5);
+        var trends = GazeReportService.GetTrends(user.UserId, 5);
+
+        // Build the popup form
+        var popup = new Form
+        {
+            Text = $"Gaze History \u2014 {user.Name}",
+            Size = new Size(620, 500),
+            StartPosition = FormStartPosition.CenterParent,
+            BackColor = Color.FromArgb(14, 22, 44),
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false, MinimizeBox = false,
+        };
+
+        var scrollPanel = new Panel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            BackColor = Color.Transparent,
+            Padding = new Padding(16, 12, 16, 12)
+        };
+        popup.Controls.Add(scrollPanel);
+
+        int y = 0;
+
+        // Title
+        scrollPanel.Controls.Add(new Label
+        {
+            Text = $"\ud83d\udcc8  Gaze Tracking History for {user.Name}",
+            Font = new Font("Segoe UI", 14, FontStyle.Bold),
+            ForeColor = Color.White,
+            AutoSize = false, Size = new Size(560, 32),
+            Location = new Point(0, y),
+            BackColor = Color.Transparent,
+        });
+        y += 36;
+
+        // Current GazeProfile summary
+        var gp = user.GazeProfile ?? new GazeProfile();
+        scrollPanel.Controls.Add(new Label
+        {
+            Text = $"Current Profile:  Strokes={gp.Strokes_Score}  Rules={gp.Rules_Score}  " +
+                   $"Practice={gp.Practice_Score}  Quiz={gp.Quiz_Score}  " +
+                   $"Spelling={gp.Spelling_Score}  Competition={gp.Competition_Score}",
+            Font = new Font("Segoe UI", 9, FontStyle.Italic),
+            ForeColor = Color.FromArgb(140, 175, 225),
+            AutoSize = false, Size = new Size(560, 22),
+            Location = new Point(0, y),
+            BackColor = Color.Transparent,
+        });
+        y += 26;
+
+        // Trend indicators
+        string trendLine = "Trends: ";
+        foreach (var kvp in trends)
+        {
+            string arrow = kvp.Value > 0 ? "\u2191" : kvp.Value < 0 ? "\u2193" : "\u2192";
+            trendLine += $"{kvp.Key}{arrow}  ";
+        }
+        scrollPanel.Controls.Add(new Label
+        {
+            Text = trendLine,
+            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            ForeColor = Color.FromArgb(60, 210, 160),
+            AutoSize = false, Size = new Size(560, 20),
+            Location = new Point(0, y),
+            BackColor = Color.Transparent,
+        });
+        y += 28;
+
+        // Separator
+        scrollPanel.Controls.Add(new Panel
+        {
+            Size = new Size(560, 1), Location = new Point(0, y),
+            BackColor = Color.FromArgb(45, 65, 100)
+        });
+        y += 8;
+
+        if (sessions.Count == 0)
+        {
+            scrollPanel.Controls.Add(new Label
+            {
+                Text = "No gaze sessions recorded yet for this user.",
+                Font = new Font("Segoe UI", 11),
+                ForeColor = Color.FromArgb(160, 180, 210),
+                AutoSize = false, Size = new Size(560, 30),
+                Location = new Point(0, y),
+                BackColor = Color.Transparent,
+            });
+        }
+        else
+        {
+            for (int i = sessions.Count - 1; i >= 0; i--)
+            {
+                var s = sessions[i];
+                string when = s.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+                string dur = TimeSpan.FromSeconds(s.DurationSeconds).ToString(@"mm\:ss");
+
+                // Session header
+                scrollPanel.Controls.Add(new Label
+                {
+                    Text = $"Session {i + 1}  \u2022  {when}  \u2022  {dur}  \u2022  {s.TotalFixations} fixations",
+                    Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                    ForeColor = Color.White,
+                    AutoSize = false, Size = new Size(560, 24),
+                    Location = new Point(0, y),
+                    BackColor = Color.Transparent,
+                });
+                y += 24;
+
+                // Dominant + neglected
+                string info = $"Dominant: {s.DominantCategory}";
+                if (s.NeglectedCategories != null && s.NeglectedCategories.Count > 0)
+                    info += $"  |  Neglected: {string.Join(", ", s.NeglectedCategories)}";
+
+                scrollPanel.Controls.Add(new Label
+                {
+                    Text = info,
+                    Font = new Font("Segoe UI", 9),
+                    ForeColor = Color.FromArgb(130, 165, 215),
+                    AutoSize = false, Size = new Size(560, 20),
+                    Location = new Point(0, y),
+                    BackColor = Color.Transparent,
+                });
+                y += 20;
+
+                // Score bars
+                if (s.SessionScores != null)
+                {
+                    string scores = "Scores: ";
+                    foreach (var sc in s.SessionScores)
+                        scores += $"{sc.Key}={sc.Value}  ";
+
+                    scrollPanel.Controls.Add(new Label
+                    {
+                        Text = scores,
+                        Font = new Font("Segoe UI", 8),
+                        ForeColor = Color.FromArgb(100, 140, 195),
+                        AutoSize = false, Size = new Size(560, 18),
+                        Location = new Point(0, y),
+                        BackColor = Color.Transparent,
+                    });
+                    y += 18;
+                }
+
+                // Separator
+                scrollPanel.Controls.Add(new Panel
+                {
+                    Size = new Size(540, 1), Location = new Point(10, y + 4),
+                    BackColor = Color.FromArgb(35, 55, 85)
+                });
+                y += 14;
+            }
+        }
+
+        popup.ShowDialog(this);
     }
 
     public void removeTuioObject(TuioObject o)

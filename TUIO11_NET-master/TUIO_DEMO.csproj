@@ -58,6 +58,8 @@
     <Compile Include="ContentService.cs" />
     <Compile Include="FaceIDClient.cs" />
     <Compile Include="GazeClient.cs" />
+    <Compile Include="GazeReportService.cs" />
+    <Compile Include="GazeSessionReport.cs" />
     <Compile Include="GestureClient.cs" />
     <Compile Include="PadelContentItem.cs" />
     <Compile Include="SystemStatusPage.cs" />

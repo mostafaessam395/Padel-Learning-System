@@ -517,7 +517,26 @@ public class RoundedShadowPanel : SmoothPanel
         _shadowOffsetX = 5;
         _shadowOffsetY = 8;
         this.BackColor = Color.Transparent;
+        _adaptiveState = TuioDemo.AdaptiveState.Balanced;
     }
+
+    // ── Adaptive gaze-tracking state ─────────────────────────────────
+    private TuioDemo.AdaptiveState _adaptiveState;
+    public TuioDemo.AdaptiveState AdaptiveState
+    {
+        get { return _adaptiveState; }
+        set { _adaptiveState = value; Invalidate(); }
+    }
+
+    /// <summary>
+    /// Animation phase for the adaptive glow (0..2PI). Updated by external timer.
+    /// </summary>
+    public float AdaptivePhase { get; set; } = 0f;
+
+    /// <summary>
+    /// Optional ribbon text displayed for Neglected/UnderFocused states.
+    /// </summary>
+    public string AdaptiveRibbonText { get; set; } = "";
 
     protected override void OnResize(EventArgs eventargs)
     {
@@ -569,7 +588,132 @@ public class RoundedShadowPanel : SmoothPanel
             }
         }
 
+        // ── Adaptive state overlays ─────────────────────────────────
+        PaintAdaptiveOverlay(g, rect);
+
         base.OnPaint(e);
+    }
+
+    /// <summary>
+    /// Renders adaptive UI treatments based on gaze tracking state.
+    /// </summary>
+    private void PaintAdaptiveOverlay(Graphics g, Rectangle rect)
+    {
+        if (_adaptiveState == TuioDemo.AdaptiveState.Balanced) return;
+
+        switch (_adaptiveState)
+        {
+            case TuioDemo.AdaptiveState.Neglected:
+                PaintNeglectedState(g, rect);
+                break;
+            case TuioDemo.AdaptiveState.UnderFocused:
+                PaintUnderFocusedState(g, rect);
+                break;
+            case TuioDemo.AdaptiveState.Familiar:
+                PaintFamiliarState(g, rect);
+                break;
+        }
+    }
+
+    private void PaintNeglectedState(Graphics g, Rectangle rect)
+    {
+        // Pulsing teal glow ring
+        float glow = 0.5f + 0.5f * (float)Math.Sin(AdaptivePhase);
+        int alpha = (int)(100 + 155 * glow);
+        float thickness = 3.0f + 2.0f * glow;
+
+        // Outer glow (soft halo)
+        using (GraphicsPath outerPath = GetRoundedRectangle(
+            new Rectangle(rect.X - 3, rect.Y - 3, rect.Width + 6, rect.Height + 6), CornerRadius + 3))
+        using (Pen glowPen = new Pen(Color.FromArgb((int)(alpha * 0.4f), 0, 210, 180), thickness + 4f))
+        {
+            g.DrawPath(glowPen, outerPath);
+        }
+
+        // Main pulsing ring
+        using (GraphicsPath ringPath = GetRoundedRectangle(rect, CornerRadius))
+        using (Pen ringPen = new Pen(Color.FromArgb(alpha, 0, 200, 170), thickness))
+        {
+            g.DrawPath(ringPen, ringPath);
+        }
+
+        // Bobbing animation offset for the ribbon
+        float bobOffset = 2f * (float)Math.Sin(AdaptivePhase * 1.3f);
+
+        // "New for you!" ribbon in top-right corner
+        string ribbonText = string.IsNullOrEmpty(AdaptiveRibbonText) ? "New for you!" : AdaptiveRibbonText;
+        DrawAdaptiveRibbon(g, ribbonText,
+            Color.FromArgb(0, 190, 160),
+            Color.White,
+            rect, bobOffset);
+    }
+
+    private void PaintUnderFocusedState(Graphics g, Rectangle rect)
+    {
+        // Subtle warm orange outline
+        float glow = 0.5f + 0.5f * (float)Math.Sin(AdaptivePhase * 0.6f);
+        int alpha = (int)(80 + 80 * glow);
+
+        using (GraphicsPath path = GetRoundedRectangle(rect, CornerRadius))
+        using (Pen warmPen = new Pen(Color.FromArgb(alpha, 255, 160, 50), 2.2f))
+        {
+            g.DrawPath(warmPen, path);
+        }
+
+        // Small "Try this!" ribbon
+        if (!string.IsNullOrEmpty(AdaptiveRibbonText))
+        {
+            DrawAdaptiveRibbon(g, AdaptiveRibbonText,
+                Color.FromArgb(220, 140, 30),
+                Color.White,
+                rect, 0f);
+        }
+    }
+
+    private void PaintFamiliarState(Graphics g, Rectangle rect)
+    {
+        // Semi-transparent dim overlay
+        using (GraphicsPath path = GetRoundedRectangle(rect, CornerRadius))
+        using (SolidBrush dimBrush = new SolidBrush(Color.FromArgb(35, 200, 200, 200)))
+        {
+            g.FillPath(dimBrush, path);
+        }
+
+        // "✓ explored" badge in bottom-right
+        string badge = "\u2713 explored";
+        using (Font badgeFont = new Font("Arial", 8.5f, FontStyle.Bold))
+        {
+            SizeF textSize = g.MeasureString(badge, badgeFont);
+            float bx = rect.Right - textSize.Width - 14;
+            float by = rect.Bottom - textSize.Height - 10;
+
+            RectangleF badgeRect = new RectangleF(bx - 6, by - 3, textSize.Width + 12, textSize.Height + 6);
+            using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(180, 60, 180, 90)))
+                g.FillRectangle(bgBrush, badgeRect);
+
+            using (SolidBrush textBrush = new SolidBrush(Color.White))
+                g.DrawString(badge, badgeFont, textBrush, bx, by);
+        }
+    }
+
+    private void DrawAdaptiveRibbon(Graphics g, string text, Color bgColor, Color textColor,
+                                     Rectangle panelRect, float yOffset)
+    {
+        using (Font ribbonFont = new Font("Arial", 9f, FontStyle.Bold))
+        {
+            SizeF textSize = g.MeasureString(text, ribbonFont);
+            float rx = panelRect.Right - textSize.Width - 16;
+            float ry = panelRect.Y + 8 + yOffset;
+
+            RectangleF ribbonRect = new RectangleF(rx - 6, ry - 2, textSize.Width + 12, textSize.Height + 4);
+
+            // Ribbon background with rounded edges
+            using (SolidBrush bgBrush = new SolidBrush(bgColor))
+                g.FillRectangle(bgBrush, ribbonRect);
+
+            using (SolidBrush textBrush = new SolidBrush(textColor))
+                g.DrawString(text, ribbonFont, textBrush, rx, ry);
+        }
     }
 
     private GraphicsPath GetRoundedRectangle(Rectangle rect, int radius)
@@ -3305,17 +3449,14 @@ public class LearningPage : Form, TuioListener
     {
         client.removeTuioListener(this);
 
-        // ── Save gaze session data ──
+        // ── Save gaze session data + persist session report ──
         try
         {
             if (_analyticsEngine != null && _analyticsEngine.IsActive)
             {
                 _analyticsEngine.StopSession();
-                var sessionScores = _analyticsEngine.ComputeSessionScores();
-                AnalyticsEngine.UpdateAndSaveProfile(currentUser, sessionScores);
-                Console.WriteLine("[LearningPage] Gaze session saved.");
-                foreach (var kvp in sessionScores)
-                    Console.WriteLine($"  {kvp.Key}: {kvp.Value}");
+                _analyticsEngine.PersistSessionReport(currentUser);
+                Console.WriteLine("[LearningPage] Gaze session report persisted.");
             }
         }
         catch (Exception ex) { Console.WriteLine($"[LearningPage] Gaze save error: {ex.Message}"); }
@@ -3390,65 +3531,138 @@ public class LearningPage : Form, TuioListener
         if (currentUser?.GazeProfile == null) return;
         var gp = currentUser.GazeProfile;
 
-        // Get weak categories (score < 40)
-        var weakCats = AnalyticsEngine.GetWeakCategories(gp, 40);
-        if (weakCats.Count == 0) return;
+        // Get last session report for context-aware classification
+        GazeSessionReport lastReport = null;
+        try { lastReport = GazeReportService.GetLatest(currentUser.UserId); }
+        catch { }
 
-        // Map category names to card controls (skip nulls)
+        // Classify all categories into AdaptiveState
+        var classifications = AnalyticsEngine.ClassifyAllCategories(gp, lastReport);
+
+        // Map category names to card controls
         var cardMap = new Dictionary<string, RoundedShadowPanel>();
-        if (cardVocabulary != null) cardMap["Strokes"] = cardVocabulary;
-        if (cardGrammar != null)    cardMap["Rules"] = cardGrammar;
-        if (cardArranging != null)  cardMap["Practice"] = cardArranging;
-        if (cardQuiz != null)       cardMap["Quiz"] = cardQuiz;
-        if (cardSpelling != null)   cardMap["Spelling"] = cardSpelling;
-        if (cardCompetition != null) cardMap["Competition"] = cardCompetition;
+        if (cardVocabulary != null)  cardMap["Strokes"]     = cardVocabulary;
+        if (cardGrammar != null)     cardMap["Rules"]        = cardGrammar;
+        if (cardArranging != null)   cardMap["Practice"]     = cardArranging;
+        if (cardQuiz != null)        cardMap["Quiz"]         = cardQuiz;
+        if (cardSpelling != null)    cardMap["Spelling"]     = cardSpelling;
+        if (cardCompetition != null) cardMap["Competition"]  = cardCompetition;
 
-        // Apply Focus Glow to weak-score cards
+        // Store original border colors and build adaptive card lists
         _glowCards.Clear();
         _originalBorderColors.Clear();
-        foreach (var weak in weakCats)
+        bool hasAnimatedCards = false;
+
+        foreach (var kvp in classifications)
         {
-            if (cardMap.ContainsKey(weak.Key))
+            if (!cardMap.ContainsKey(kvp.Key)) continue;
+            var card = cardMap[kvp.Key];
+            _originalBorderColors[card] = card.BorderColor;
+
+            card.AdaptiveState = kvp.Value;
+
+            // Set ribbon text based on state
+            switch (kvp.Value)
             {
-                var card = cardMap[weak.Key];
-                _originalBorderColors[card] = card.BorderColor;
-                _glowCards.Add(card);
+                case AdaptiveState.Neglected:
+                    card.AdaptiveRibbonText = "New for you!";
+                    _glowCards.Add(card);
+                    hasAnimatedCards = true;
+                    break;
+                case AdaptiveState.UnderFocused:
+                    card.AdaptiveRibbonText = "Try this!";
+                    _glowCards.Add(card);
+                    hasAnimatedCards = true;
+                    break;
+                case AdaptiveState.Familiar:
+                    card.AdaptiveRibbonText = "";
+                    break;
+                default:
+                    card.AdaptiveRibbonText = "";
+                    break;
             }
         }
 
-        // Start Focus Glow pulsing animation
-        if (_glowCards.Count > 0)
+        // Start unified animation timer for all adaptive cards
+        if (hasAnimatedCards)
         {
             _focusGlowTimer = new System.Windows.Forms.Timer { Interval = 45 };
             _focusGlowTimer.Tick += (s, e) =>
             {
-                _glowPhase += 0.08f;
+                _glowPhase += 0.07f;
                 if (_glowPhase > 6.28f) _glowPhase = 0f;
-                float glow = 0.5f + 0.5f * (float)Math.Sin(_glowPhase);
-                int alpha = (int)(120 + 135 * glow);
-                Color pulseColor = Color.FromArgb(alpha, 255, 180, 40);
+
                 foreach (var card in _glowCards)
                 {
-                    card.BorderColor = pulseColor;
-                    card.BorderThickness = 2.5f + 1.5f * glow;
+                    card.AdaptivePhase = _glowPhase;
                     card.Invalidate();
+                }
+
+                // Also invalidate Familiar cards (static overlay, no animation needed after first paint)
+                foreach (var kvp in cardMap)
+                {
+                    if (kvp.Value.AdaptiveState == AdaptiveState.Familiar)
+                        kvp.Value.Invalidate();
                 }
             };
             _focusGlowTimer.Start();
         }
 
-        // Proactive TTS coaching
-        if (weakCats.Count > 0 && _learningSynth != null && !AppSettings.IsMuted)
+        // ── Proactive TTS coaching nudge (context-aware) ──
+        BuildAdaptiveTTSMessage(classifications, lastReport);
+    }
+
+    /// <summary>
+    /// Generates a personalized TTS coaching message based on the user's
+    /// cross-session gaze pattern.
+    /// </summary>
+    private void BuildAdaptiveTTSMessage(
+        Dictionary<string, AdaptiveState> classifications,
+        GazeSessionReport lastReport)
+    {
+        if (_learningSynth == null || AppSettings.IsMuted) return;
+
+        try
         {
-            string weakName = AnalyticsEngine.GetCardDisplayName(weakCats[0].Key);
-            try
+            var neglected = new List<string>();
+            var familiar = new List<string>();
+
+            foreach (var kvp in classifications)
             {
-                _learningSynth.SpeakAsync(
-                    $"Welcome back! I noticed you skipped {weakName} last time. " +
-                    $"Let's focus on it today to improve your padel skills.");
+                if (kvp.Value == AdaptiveState.Neglected)
+                    neglected.Add(AnalyticsEngine.GetCardDisplayName(kvp.Key));
+                else if (kvp.Value == AdaptiveState.Familiar)
+                    familiar.Add(AnalyticsEngine.GetCardDisplayName(kvp.Key));
             }
-            catch { }
+
+            string message = $"Welcome back, {currentUser.Name}! ";
+
+            // Mention what they're good at
+            if (familiar.Count > 0)
+                message += $"Great progress on {familiar[0]}. ";
+
+            // Steer them toward neglected content
+            if (neglected.Count > 0)
+            {
+                message += $"Today, let's explore {neglected[0]}";
+                if (neglected.Count > 1)
+                    message += $" and {neglected[1]}";
+                message += ". I've highlighted them for you.";
+            }
+            else
+            {
+                message += "Your training looks well-balanced. Keep it up!";
+            }
+
+            // Check session count for returning-user awareness
+            int sessionCount = GazeReportService.GetSessionCount(currentUser.UserId);
+            if (sessionCount > 3)
+                message += $" This is session number {sessionCount + 1}.";
+
+            _learningSynth.Rate = AppSettings.VoiceRate;
+            _learningSynth.SpeakAsync(message);
         }
+        catch { }
     }
 
     public void updateTuioObject(TuioObject o) { }

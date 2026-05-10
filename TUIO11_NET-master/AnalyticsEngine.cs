@@ -4,6 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
+using TuioDemo;
 
 /// <summary>
 /// Processes raw gaze points into fixations, maps them to UI activity regions,
@@ -66,6 +67,24 @@ public class AnalyticsEngine
     }
 
     public bool IsActive => _isActive;
+
+    /// <summary>
+    /// Returns the raw per-category dwell time dictionary (ms) for the current session.
+    /// </summary>
+    public Dictionary<string, float> GetDwellTimes()
+    {
+        return new Dictionary<string, float>(_timeOnTarget);
+    }
+
+    /// <summary>
+    /// Returns the total number of detected fixations in the current session.
+    /// </summary>
+    public int FixationCount => _fixations.Count;
+
+    /// <summary>
+    /// Returns the session start timestamp.
+    /// </summary>
+    public DateTime SessionStart => _sessionStart;
 
     /// <summary>
     /// Feed a raw gaze point (called from GazeRouter handler).
@@ -154,6 +173,112 @@ public class AnalyticsEngine
             case "Competition": return "Competition";
             default: return category;
         }
+    }
+
+    /// <summary>
+    /// Create a full GazeSessionReport, persist it to the gaze_reports directory,
+    /// and update the user's GazeProfile in users.json. Call this on session end.
+    /// </summary>
+    public void PersistSessionReport(UserData user)
+    {
+        if (user == null || string.IsNullOrEmpty(user.UserId)) return;
+
+        try
+        {
+            // Ensure scores are computed
+            var sessionScores = ComputeSessionScores();
+            var dwellTimes = GetDwellTimes();
+
+            // Determine dominant & neglected categories
+            string dominant = "";
+            var neglected = new List<string>();
+
+            if (sessionScores.Count > 0)
+            {
+                dominant = sessionScores.OrderByDescending(kv => kv.Value).First().Key;
+                neglected = sessionScores.Where(kv => kv.Value < 30)
+                                         .OrderBy(kv => kv.Value)
+                                         .Select(kv => kv.Key)
+                                         .Take(2)
+                                         .ToList();
+            }
+
+            // Build the dwell times dictionary<string,double> from the float version
+            var dwellDouble = new Dictionary<string, double>();
+            foreach (var kvp in dwellTimes)
+                dwellDouble[kvp.Key] = kvp.Value;
+
+            var report = new GazeSessionReport
+            {
+                SessionId = Guid.NewGuid().ToString("N").Substring(0, 12),
+                UserId = user.UserId,
+                Timestamp = DateTime.UtcNow,
+                DurationSeconds = (DateTime.UtcNow - _sessionStart).TotalSeconds,
+                TotalFixations = _fixations.Count,
+                DominantCategory = dominant,
+                NeglectedCategories = neglected,
+                CardDwellTimes = dwellDouble,
+                SessionScores = sessionScores
+            };
+
+            // Persist the session report to gaze_reports/{userId}_history.json
+            GazeReportService.Save(report);
+
+            // Update GazeProfile in users.json using weighted moving average
+            UpdateAndSaveProfile(user, sessionScores);
+
+            Console.WriteLine($"[AnalyticsEngine] Session report persisted for {user.Name} " +
+                              $"(duration={report.DurationSeconds:F0}s, fixations={report.TotalFixations}, " +
+                              $"dominant={dominant})");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AnalyticsEngine] PersistSessionReport error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Classifies attention level into an AdaptiveState based on the user's
+    /// accumulated GazeProfile score and optional last-session context.
+    /// </summary>
+    public static AdaptiveState ClassifyAttention(int score, GazeSessionReport lastSession = null)
+    {
+        // If we have a recent session, check if the user just engaged with this card
+        // (score might still be low overall but trending up)
+        if (lastSession != null && lastSession.SessionScores != null)
+        {
+            // Don't penalize a category that was dominant last session
+            // even if its accumulated score is still moderate
+        }
+
+        if (score < 30)  return AdaptiveState.Neglected;    // Strong pulsing glow + ribbon
+        if (score < 50)  return AdaptiveState.UnderFocused;  // Soft warm outline + scale nudge
+        if (score > 75)  return AdaptiveState.Familiar;      // De-emphasized, "✓ explored" badge
+        return AdaptiveState.Balanced;                        // Default rendering
+    }
+
+    /// <summary>
+    /// Get all categories with their AdaptiveState classification for a user.
+    /// </summary>
+    public static Dictionary<string, AdaptiveState> ClassifyAllCategories(GazeProfile profile, GazeSessionReport lastSession = null)
+    {
+        var result = new Dictionary<string, AdaptiveState>();
+        if (profile == null) return result;
+
+        var scores = new Dictionary<string, int>
+        {
+            { "Strokes", profile.Strokes_Score },
+            { "Rules", profile.Rules_Score },
+            { "Practice", profile.Practice_Score },
+            { "Quiz", profile.Quiz_Score },
+            { "Spelling", profile.Spelling_Score },
+            { "Competition", profile.Competition_Score }
+        };
+
+        foreach (var kvp in scores)
+            result[kvp.Key] = ClassifyAttention(kvp.Value, lastSession);
+
+        return result;
     }
 
     // ── Internal logic ──
