@@ -467,6 +467,13 @@ public class EnrollmentPage : Form, TuioListener
                     break;
 
                 case Step.Name:
+                    // Gesture-mode mapping (different from the marker mapping
+                    // because we only have 4 gestures but 6 marker actions in
+                    // this step — see docs/manual-test-scenarios.md):
+                    //   SwipeRight → next letter in the A-Z highlight
+                    //   SwipeLeft  → backspace (delete last committed letter)
+                    //   Checkmark  → commit the highlighted letter
+                    //   Circle     → done when name is non-empty; cancel wizard when empty
                     if (name == "SwipeRight")
                     {
                         _letterIndex = (_letterIndex + 1) % 26;
@@ -474,11 +481,17 @@ public class EnrollmentPage : Form, TuioListener
                     }
                     else if (name == "SwipeLeft")
                     {
-                        _letterIndex = (((_letterIndex - 1) % 26) + 26) % 26;
-                        RenderSpelling();
+                        HandleNameMarker(5);  // backspace
                     }
-                    else if (name == "Checkmark") HandleNameMarker(4);  // commit
-                    else if (name == "Circle")    HandleNameMarker(7);  // done
+                    else if (name == "Checkmark")
+                    {
+                        HandleNameMarker(4);  // commit current letter
+                    }
+                    else if (name == "Circle")
+                    {
+                        if (string.IsNullOrEmpty(_name)) CancelWizard();
+                        else HandleNameMarker(7);  // done
+                    }
                     break;
 
                 case Step.Level:

@@ -68,7 +68,7 @@ The recogniser fires at most once every ~1.6 seconds per gesture (cooldown). It 
 
 ### Universal gesture → action mapping
 
-When a page hasn't subscribed for context-specific gesture handling, gestures fall back to a simulated TUIO marker:
+When a page hasn't subscribed for context-specific gesture handling, gestures fall back to a simulated TUIO marker. Pages with a richer mapping (LearningPage focus cursor, EnrollmentPage step-specific, AdminDashboard tile cursor, Quiz answer picks) **override** this fallback once their focus or context is active.
 
 | Gesture | Default marker | Effect (legacy fallback) |
 |---|---|---|
@@ -145,11 +145,13 @@ A `_` placeholder over an A–Z strip with `[A]` highlighted.
 | Action | TUIO | Gesture |
 |---|---|---|
 | Cycle highlight to next letter | rotate **marker 6** clockwise (~18°/letter) | **SwipeRight** |
-| Cycle highlight to previous letter | rotate **marker 6** counter-clockwise | **SwipeLeft** |
+| Cycle highlight to previous letter | rotate **marker 6** counter-clockwise | *(no gesture in this step — use marker 6 CCW)* |
 | Commit the highlighted letter to the name | place **marker 4** | **Checkmark** |
-| Backspace last letter | place **marker 5** | *(no gesture — use marker 5)* |
-| Done — name is complete, advance to step 3 | place **marker 7** | **Circle** |
-| Cancel the whole wizard | place **marker 20** | *(no gesture in this step — use marker 20)* |
+| Backspace last letter | place **marker 5** | **SwipeLeft** |
+| Done — name is complete, advance to step 3 | place **marker 7** | **Circle** *(when name is non-empty)* |
+| Cancel the whole wizard | place **marker 20** | **Circle** *(when name is empty)* |
+
+The gesture mapping for SwipeLeft is **backspace** (more useful than backward-cycling). To cycle the highlight backwards through the alphabet without TUIO, go forward 25 letters — not great UX, so rotate marker 6 CCW if you have it. **Circle is context-sensitive in this step**: empty name → cancel wizard, non-empty → finish.
 
 Spelling "TESTER" with gestures: SwipeRight×19 (A→T), Checkmark, SwipeRight×... etc. Slow but works.
 
@@ -258,8 +260,8 @@ Summary shows name + level + gender.
 **Goal:** verify the lesson page accepts both rotation and swipes for cycling through padel terms.
 
 1. From LearningPage, open Padel Shots (Beginner level):
-   - **TUIO:** place **marker 3** to open Beginner level → place **marker 3** again to open Padel Shots.
-   - **Gesture:** the universal map fires marker 4 on Checkmark — opens Padel Rules instead. (No gesture for "marker 3" specifically. Use TUIO for level/category selection here.)
+   - **TUIO:** place **marker 3** to open Padel Shots.
+   - **Gesture:** **SwipeRight** to wake the focus cursor → a blue 5-pixel border appears around the first card (Strokes). Keep SwipeRight to cycle through Strokes → Rules → AI Vision Coach → Quick Challenge → Speed Mode → Competition. **SwipeLeft** cycles backwards. **Checkmark** opens the focused card. **Circle** closes LearningPage and goes back to HomePage. *(Without any prior swipe, Checkmark falls back to the universal marker-4 map and opens Padel Rules directly — the focus path only kicks in once you've swiped.)*
 2. Once a LessonPage is open, cycle terms:
 
 | Action | TUIO | Gesture |
@@ -336,6 +338,47 @@ While on HomePage, watch the HUD sub-label as you:
 
 ---
 
+## Scenario L — AdminDashboard navigation by gestures
+
+**Goal:** verify an admin can drive the dashboard's 4 nav tiles purely with gestures.
+
+1. Log in with the admin Bluetooth MAC so AdminDashboard opens.
+2. The four tiles are, left to right: **Manage Content** (marker 31) · **Test Levels** (marker 32) · **Test Markers** (marker 33) · **System Status** (marker 34). Plus a **Back to System** card below.
+3. Use the gesture focus cursor:
+
+| Action | TUIO | Gesture |
+|---|---|---|
+| Move focus to next tile | place marker 31/32/33/34 directly | **SwipeRight** (cycles 0→1→2→3→0…) |
+| Move focus to previous tile | (place a different marker) | **SwipeLeft** |
+| Open the focused tile | (place the corresponding marker) | **Checkmark** |
+| Back to HomePage | marker **20** | **Circle**, or **SwipeLeft** before any focus is set |
+
+The focused tile gets a brighter blue-grey background (`40, 60, 110` RGB).
+
+**Pass:** four swipes cycle through Manage Content → Test Levels → Test Markers → System Status; Checkmark opens whichever is currently highlighted.
+
+**Note:** the sub-pages opened from the dashboard (ContentManager, TestLevels, TestMarkers, SystemStatus) still use TUIO for their internal navigation.
+
+---
+
+## Scenario M — LearningPage navigation by gestures (focus cursor)
+
+**Goal:** open any of the 6 lesson cards with only gestures.
+
+1. Log in as a player. LearningPage opens.
+2. **SwipeRight** to wake the focus cursor — a thick blue (5px) border appears around the first card (Strokes / Padel Shots).
+3. Continue swiping right to cycle through the six cards in order:
+   - Strokes (Padel Shots) → Rules → AI Vision Coach → Quick Challenge → Speed Mode → Competition → (wraps to Strokes)
+4. **SwipeLeft** cycles backwards. **Checkmark** opens the focused card. **Circle** closes LearningPage and returns to HomePage.
+
+**Pass:**
+- The blue focus border moves to whichever card is "current".
+- Checkmark opens that exact card (not Padel Rules — that's the universal-marker-4 fallback which is suppressed once the focus cursor is active).
+
+**To get back to the universal-marker-4 fallback:** close LearningPage (Circle) and reopen; the focus cursor resets to inactive on each page open.
+
+---
+
 ## Cleanup after testing
 
 1. Restore `Data\users.json` from backup if you don't want to keep the test user.
@@ -371,3 +414,16 @@ The gesture path is best for **simple yes/no/next/back** decisions and for users
 - Hand gestures require ~2-second strokes with clear arm motion; tiny hand-only gestures don't trigger (MediaPipe Pose tracks the whole body, including shoulder + elbow + wrist).
 - Only the four canonical gestures are recognised; anything outside that set (a wave, a fist, etc.) is silently ignored.
 - The `Skelaton/DynamicPatternsPadel/` set (Forehand / Backhand / Volleys) is **not** wired into this UI — it's coaching content for the AI Vision Coach page, not navigation.
+
+### Gesture-coverage gaps (the things still TUIO-only)
+
+After the focus-cursor work, the only system actions without a gesture path are:
+
+| Where | What | Why |
+|---|---|---|
+| HomePage circular settings menu (markers 21–28) | Open Display / Audio / System sub-menus, toggle Dark Mode, Mute, Voice Speed, Reset App, App Info | The circular menu is driven by marker 30's continuous rotation. Settings are infrequent; building a gesture overlay over the radial dial is out of scope. Use TUIO. |
+| HomePage circular menu rotation cursor (marker 30) | Drive the radial dial | Continuous angular input doesn't map cleanly to four discrete gestures. |
+| EnrollmentPage step 2 backwards letter cycle | Cycle the A–Z highlight **backwards** | SwipeLeft now means **backspace** in this step (more useful). To go backwards through the alphabet, use marker 6 CCW or just SwipeRight forward 25 times. |
+| AIVisionCoachPage / SystemStatusPage / ContentManagerPage / TestLevelsPage / TestMarkersPage | All their internal controls | Sub-pages of the admin dashboard. Reachable from AdminDashboard via the gesture focus cursor + Checkmark, but their *own* internal navigation is TUIO-only. |
+
+Everything else in the main player flow (login, enrolment, browsing, lessons, quizzes) has a gesture path.

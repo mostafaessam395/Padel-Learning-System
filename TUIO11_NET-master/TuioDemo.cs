@@ -2394,9 +2394,11 @@ public class LearningPage : Form, TuioListener
         animTimer.Start();
         this.FormClosed += delegate { animTimer.Stop(); animTimer.Dispose(); };
 
-        // Subscribe to gesture router
+        // Subscribe to gesture router (legacy marker + named gestures)
         this.Shown += (s, e) => { GestureRouter.OnGestureMarker += HandleGestureMarker; };
         this.FormClosed += (s, e) => { GestureRouter.OnGestureMarker -= HandleGestureMarker; };
+        this.Shown += (s, e) => { GestureRouter.OnGestureRecognized += HandleGestureName; };
+        this.FormClosed += (s, e) => { GestureRouter.OnGestureRecognized -= HandleGestureName; };
 
         // Subscribe to expression-based adaptive UI (happy2.jpg bg + music)
         AdaptiveUIHelper.Register(this);
@@ -3763,10 +3765,123 @@ public class LearningPage : Form, TuioListener
         return Color.FromArgb(r, g, b);
     }
 
+    // ─────────────────────────────────────────────────────────────────
+    //  Gesture focus cursor (hand-gesture parallel navigation)
+    // ─────────────────────────────────────────────────────────────────
+    //  When the user has only the 4 gestures (no TUIO markers), they can
+    //  cycle a visual focus through the 6 lesson cards with SwipeRight /
+    //  SwipeLeft and open the focused one with Checkmark. Circle closes
+    //  back to HomePage. Once focus is active, the legacy universal
+    //  marker fallback (Checkmark→4, SwipeR→7) is suppressed on this
+    //  page so the focused card wins.
+
+    private int _gestureFocus = -1;          // -1 = inactive, 0..5 = card index
+    private bool _gestureFocusActive = false;
+    private readonly Dictionary<int, Color> _origBorderColor = new Dictionary<int, Color>();
+    private readonly Dictionary<int, float> _origBorderThickness = new Dictionary<int, float>();
+
+    private RoundedShadowPanel GetCardByIndex(int index)
+    {
+        switch (index)
+        {
+            case 0: return cardVocabulary;   // marker 3 → Strokes
+            case 1: return cardGrammar;       // marker 4 → Rules
+            case 2: return cardArranging;     // marker 5 → AI Vision Coach
+            case 3: return cardQuiz;          // marker 6 → Quick Challenge
+            case 4: return cardSpelling;      // marker 7 → Speed Mode
+            case 5: return cardCompetition;   // marker 8 → Competition
+        }
+        return null;
+    }
+
+    private void ApplyGestureFocus(int newIndex)
+    {
+        // Restore previously focused card's border
+        if (_gestureFocus >= 0)
+        {
+            var prev = GetCardByIndex(_gestureFocus);
+            if (prev != null && _origBorderColor.TryGetValue(_gestureFocus, out Color oc))
+            {
+                prev.BorderColor = oc;
+                prev.BorderThickness = _origBorderThickness[_gestureFocus];
+                prev.Invalidate();
+            }
+        }
+
+        _gestureFocus = newIndex;
+
+        if (_gestureFocus >= 0)
+        {
+            var card = GetCardByIndex(_gestureFocus);
+            if (card != null)
+            {
+                if (!_origBorderColor.ContainsKey(_gestureFocus))
+                {
+                    _origBorderColor[_gestureFocus] = card.BorderColor;
+                    _origBorderThickness[_gestureFocus] = card.BorderThickness;
+                }
+                card.BorderColor = Color.FromArgb(255, 30, 130, 255);
+                card.BorderThickness = 5f;
+                card.Invalidate();
+            }
+        }
+    }
+
+    private void HandleGestureName(string name, float score)
+    {
+        if (!this.Visible || this.IsDisposed || !this.IsHandleCreated) return;
+        if (string.IsNullOrEmpty(name)) return;
+
+        try
+        {
+            this.BeginInvoke((MethodInvoker)delegate
+            {
+                if (this.IsDisposed || lessonOpen) return;
+
+                switch (name)
+                {
+                    case "SwipeRight":
+                        _gestureFocusActive = true;
+                        ApplyGestureFocus(_gestureFocus < 0 ? 0 : (_gestureFocus + 1) % 6);
+                        break;
+
+                    case "SwipeLeft":
+                        if (!_gestureFocusActive)
+                        {
+                            // No focus yet → SwipeLeft acts as "back to home"
+                            this.Close();
+                            return;
+                        }
+                        ApplyGestureFocus(((_gestureFocus - 1) % 6 + 6) % 6);
+                        break;
+
+                    case "Checkmark":
+                        if (_gestureFocus < 0) return;  // no focus → let legacy marker-4 fallback handle it
+                        // Synthesise the equivalent TUIO marker placement and route through the existing handler
+                        int targetMarker = 3 + _gestureFocus;
+                        long sid = 888800L + targetMarker + DateTime.Now.Millisecond;
+                        try { this.addTuioObject(new TuioObject(sid, targetMarker, 0.5f, 0.5f, 0f)); }
+                        catch (Exception ex) { Console.WriteLine($"[LearningPage] gesture-open error: {ex.Message}"); }
+                        break;
+
+                    case "Circle":
+                        this.Close();
+                        break;
+                }
+            });
+        }
+        catch { }
+    }
+
     // Gesture handler
     private void HandleGestureMarker(int markerId)
     {
         if (!this.Visible || this.IsDisposed || !this.IsHandleCreated) return;
+
+        // When the user is navigating with the gesture focus cursor, the
+        // name handler is in charge — silence the universal marker fallback
+        // so Checkmark (→4) doesn't race to open Padel Rules over the focused card.
+        if (_gestureFocusActive && markerId != 20) return;
 
         Console.WriteLine($"[LearningPage] Gesture marker: {markerId}");
 

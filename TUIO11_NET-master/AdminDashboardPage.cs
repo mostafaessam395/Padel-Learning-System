@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
@@ -17,6 +18,12 @@ public class AdminDashboardPage : Form, TuioListener
     private readonly GestureClient _gestureRef;
     private readonly FaceIDClient  _faceRef;
     private readonly GazeClient    _gazeRef;
+
+    // Gesture-focus cursor over the 4 nav tiles (markers 31..34).
+    private readonly List<Panel> _navTiles = new List<Panel>();
+    private readonly Dictionary<int, Color> _origTileBg = new Dictionary<int, Color>();
+    private int _gestureFocus = -1;
+    private bool _gestureFocusActive = false;
 
     public AdminDashboardPage(
         TuioClient    tuioClient,
@@ -46,10 +53,12 @@ public class AdminDashboardPage : Form, TuioListener
         {
             if (_tuioClient != null) _tuioClient.addTuioListener(this);
             GestureRouter.OnGestureMarker += HandleGestureMarker;
+            GestureRouter.OnGestureRecognized += HandleGestureName;
         };
         this.FormClosed += (s, e) =>
         {
             GestureRouter.OnGestureMarker -= HandleGestureMarker;
+            GestureRouter.OnGestureRecognized -= HandleGestureName;
             if (_tuioClient != null) _tuioClient.removeTuioListener(this);
         };
     }
@@ -126,6 +135,7 @@ public class AdminDashboardPage : Form, TuioListener
             var card = BuildCard(c.Icon, c.Title, c.Sub, c.Accent, c.Marker, CARD_W, CARD_H);
             card.Location = new Point(i * (CARD_W + CARD_GAP), 0);
             cardHolder.Controls.Add(card);
+            _navTiles.Add(card);
         }
 
         // Row 2: Back card centered under the 4 cards
@@ -348,7 +358,76 @@ public class AdminDashboardPage : Form, TuioListener
     private void HandleGestureMarker(int id)
     {
         if (!this.Visible || this.IsDisposed) return;
+        // When the user is navigating via the gesture focus cursor, the named
+        // handler is in charge — only the close marker still applies.
+        if (_gestureFocusActive && id != 20) return;
         this.BeginInvoke((MethodInvoker)(() => DispatchMarker(id)));
+    }
+
+    // ── Hand-gesture focus cursor (parallel input) ───────────────────────
+    private void HandleGestureName(string name, float score)
+    {
+        if (!this.Visible || this.IsDisposed) return;
+        if (string.IsNullOrEmpty(name)) return;
+
+        try
+        {
+            this.BeginInvoke((MethodInvoker)delegate
+            {
+                if (this.IsDisposed) return;
+
+                switch (name)
+                {
+                    case "SwipeRight":
+                        _gestureFocusActive = true;
+                        ApplyGestureFocus(_gestureFocus < 0 ? 0 : (_gestureFocus + 1) % _navTiles.Count);
+                        break;
+
+                    case "SwipeLeft":
+                        if (!_gestureFocusActive)
+                        {
+                            GoBack();
+                            return;
+                        }
+                        ApplyGestureFocus(((_gestureFocus - 1) % _navTiles.Count + _navTiles.Count) % _navTiles.Count);
+                        break;
+
+                    case "Checkmark":
+                        if (_gestureFocus < 0) return;
+                        // markers 31..34 in tile order
+                        DispatchMarker(31 + _gestureFocus);
+                        break;
+
+                    case "Circle":
+                        GoBack();
+                        break;
+                }
+            });
+        }
+        catch { }
+    }
+
+    private void ApplyGestureFocus(int newIndex)
+    {
+        if (_navTiles.Count == 0) return;
+
+        // Restore previous tile's background
+        if (_gestureFocus >= 0 && _gestureFocus < _navTiles.Count
+            && _origTileBg.TryGetValue(_gestureFocus, out Color origBg))
+        {
+            _navTiles[_gestureFocus].BackColor = origBg;
+        }
+
+        _gestureFocus = newIndex;
+
+        if (_gestureFocus >= 0 && _gestureFocus < _navTiles.Count)
+        {
+            var tile = _navTiles[_gestureFocus];
+            if (!_origTileBg.ContainsKey(_gestureFocus))
+                _origTileBg[_gestureFocus] = tile.BackColor;
+            // Brighten the background to indicate focus
+            tile.BackColor = Color.FromArgb(40, 60, 110);
+        }
     }
 
     private void DispatchMarker(int id)
