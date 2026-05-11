@@ -673,27 +673,54 @@ public class RoundedShadowPanel : SmoothPanel
 
     private void PaintFamiliarState(Graphics g, Rectangle rect)
     {
-        // Semi-transparent dim overlay
-        using (GraphicsPath path = GetRoundedRectangle(rect, CornerRadius))
-        using (SolidBrush dimBrush = new SolidBrush(Color.FromArgb(35, 200, 200, 200)))
+        // Gentle gold accent — positive highlight for "you used this most"
+        float glow = 0.5f + 0.5f * (float)Math.Sin(AdaptivePhase * 0.6f);
+        int outerAlpha = (int)(90 + 100 * glow);
+        int innerAlpha = (int)(160 + 80 * glow);
+        float thickness = 2.6f + 1.2f * glow;
+
+        // Soft outer halo (warm amber)
+        using (GraphicsPath outerPath = GetRoundedRectangle(
+            new Rectangle(rect.X - 3, rect.Y - 3, rect.Width + 6, rect.Height + 6), CornerRadius + 3))
+        using (Pen halo = new Pen(Color.FromArgb(outerAlpha, 255, 195, 70), thickness + 3f))
         {
-            g.FillPath(dimBrush, path);
+            g.DrawPath(halo, outerPath);
+        }
+
+        // Main gold border
+        using (GraphicsPath path = GetRoundedRectangle(rect, CornerRadius))
+        using (Pen ringPen = new Pen(Color.FromArgb(innerAlpha, 240, 175, 40), thickness))
+        {
+            g.DrawPath(ringPen, path);
         }
 
         // "✓ explored" badge in bottom-right
-        string badge = "\u2713 explored";
-        using (Font badgeFont = new Font("Arial", 8.5f, FontStyle.Bold))
+        // Ribbon text takes priority when set (e.g. "Picked up from last time!"),
+        // otherwise show the small explored badge in the corner.
+        if (!string.IsNullOrEmpty(AdaptiveRibbonText))
         {
-            SizeF textSize = g.MeasureString(badge, badgeFont);
-            float bx = rect.Right - textSize.Width - 14;
-            float by = rect.Bottom - textSize.Height - 10;
+            float bobOffset = 1.5f * (float)Math.Sin(AdaptivePhase);
+            DrawAdaptiveRibbon(g, AdaptiveRibbonText,
+                Color.FromArgb(220, 160, 30),
+                Color.White,
+                rect, bobOffset);
+        }
+        else
+        {
+            string badge = "\u2713 explored";
+            using (Font badgeFont = new Font("Arial", 8.5f, FontStyle.Bold))
+            {
+                SizeF textSize = g.MeasureString(badge, badgeFont);
+                float bx = rect.Right - textSize.Width - 14;
+                float by = rect.Bottom - textSize.Height - 10;
 
-            RectangleF badgeRect = new RectangleF(bx - 6, by - 3, textSize.Width + 12, textSize.Height + 6);
-            using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(180, 60, 180, 90)))
-                g.FillRectangle(bgBrush, badgeRect);
+                RectangleF badgeRect = new RectangleF(bx - 6, by - 3, textSize.Width + 12, textSize.Height + 6);
+                using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(190, 220, 165, 30)))
+                    g.FillRectangle(bgBrush, badgeRect);
 
-            using (SolidBrush textBrush = new SolidBrush(Color.White))
-                g.DrawString(badge, badgeFont, textBrush, bx, by);
+                using (SolidBrush textBrush = new SolidBrush(Color.White))
+                    g.DrawString(badge, badgeFont, textBrush, bx, by);
+            }
         }
     }
 
@@ -3618,6 +3645,22 @@ public class LearningPage : Form, TuioListener
                 default:
                     card.AdaptiveRibbonText = "";
                     break;
+            }
+        }
+
+        // ── Last-session favourite highlight ────────────────────────────
+        // If the user has a previous session, mark whichever card they engaged
+        // with most last time as "Picked up from last time!" — a positive
+        // visual cue (Familiar paint, plus a gentle pulse via _glowCards).
+        if (lastReport != null && !string.IsNullOrEmpty(lastReport.DominantCategory)
+            && cardMap.TryGetValue(lastReport.DominantCategory, out var favCard))
+        {
+            favCard.AdaptiveState = AdaptiveState.Familiar;
+            favCard.AdaptiveRibbonText = "Picked up from last time!";
+            if (!_glowCards.Contains(favCard))
+            {
+                _glowCards.Add(favCard);
+                hasAnimatedCards = true;
             }
         }
 

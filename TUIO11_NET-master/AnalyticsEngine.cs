@@ -376,10 +376,17 @@ public class AnalyticsEngine
             string json = File.ReadAllText(path);
             var users = JsonConvert.DeserializeObject<List<TuioDemo.UserData>>(json) ?? new List<TuioDemo.UserData>();
 
-            // Find and update the matching user in the list
+            // Match by UserId when available (preferred — unique). Fall back to Name only for
+            // legacy records that never received a UserId.
             for (int i = 0; i < users.Count; i++)
             {
-                if (string.Equals(users[i].Name, updatedUser.Name, StringComparison.OrdinalIgnoreCase))
+                bool match;
+                if (!string.IsNullOrEmpty(updatedUser.UserId) && !string.IsNullOrEmpty(users[i].UserId))
+                    match = string.Equals(users[i].UserId, updatedUser.UserId, StringComparison.Ordinal);
+                else
+                    match = string.Equals(users[i].Name, updatedUser.Name, StringComparison.OrdinalIgnoreCase);
+
+                if (match)
                 {
                     users[i].GazeProfile = updatedUser.GazeProfile;
                     break;
