@@ -4005,9 +4005,11 @@ public class LessonPage : Form, TuioListener
         }
         catch { _synth = null; }
 
-        // Subscribe to gesture router
+        // Subscribe to gesture router (legacy marker route + named route)
         this.Shown += (s, e) => { GestureRouter.OnGestureMarker += HandleGestureMarker; };
         this.FormClosed += (s, e) => { GestureRouter.OnGestureMarker -= HandleGestureMarker; };
+        this.Shown += (s, e) => { GestureRouter.OnGestureRecognized += HandleGestureName; };
+        this.FormClosed += (s, e) => { GestureRouter.OnGestureRecognized -= HandleGestureName; };
 
         // Subscribe to expression router for panel color updates
         // NOTE: music is handled exclusively by AdaptiveUIHelper — no PlayBackgroundMusic here
@@ -4016,6 +4018,31 @@ public class LessonPage : Form, TuioListener
 
         // Register shared adaptive UI helper (handles background + music)
         AdaptiveUIHelper.Register(this);
+    }
+
+    /// <summary>
+    /// Hand-gesture handler for LessonPage. Swipes cycle through padel
+    /// terms (same effect as rotating marker 6); Checkmark replays the
+    /// current term's voice; Circle closes the lesson.
+    /// </summary>
+    private void HandleGestureName(string name, float score)
+    {
+        if (!this.Visible || this.IsDisposed) return;
+        try
+        {
+            this.BeginInvoke((MethodInvoker)delegate
+            {
+                if (this.IsDisposed) return;
+                switch (name)
+                {
+                    case "SwipeRight": NextItem(); break;
+                    case "SwipeLeft":  PreviousItem(); break;
+                    case "Checkmark":  ReplayVoice(); break;
+                    case "Circle":     this.Close(); break;
+                }
+            });
+        }
+        catch { }
     }
 
     [System.Runtime.InteropServices.DllImport("winmm.dll")]
@@ -5255,9 +5282,35 @@ public class QuizPage : Form, TuioListener
 
         this.Shown += (s, e) => LoadQuestion();
 
-        // Subscribe to gesture router
+        // Subscribe to gesture router (legacy marker + named gestures)
         this.Shown += (s, e) => { GestureRouter.OnGestureMarker += HandleGestureMarker; };
         this.FormClosed += (s, e) => { GestureRouter.OnGestureMarker -= HandleGestureMarker; };
+        this.Shown += (s, e) => { GestureRouter.OnGestureRecognized += HandleGestureName; };
+        this.FormClosed += (s, e) => { GestureRouter.OnGestureRecognized -= HandleGestureName; };
+    }
+
+    /// <summary>
+    /// Quiz/Spelling hand-gesture handler: SwipeLeft / Checkmark /
+    /// SwipeRight pick answer A / B / C respectively. Circle closes.
+    /// </summary>
+    private void HandleGestureName(string name, float score)
+    {
+        if (!this.Visible || this.IsDisposed) return;
+        try
+        {
+            this.BeginInvoke((MethodInvoker)delegate
+            {
+                if (this.IsDisposed) return;
+                switch (name)
+                {
+                    case "SwipeLeft":  TryAnswer(0); break;
+                    case "Checkmark":  TryAnswer(1); break;
+                    case "SwipeRight": TryAnswer(2); break;
+                    case "Circle":     this.Close(); break;
+                }
+            });
+        }
+        catch { }
     }
 
     private void BuildUI()
@@ -5656,9 +5709,35 @@ public class SpellingPage : Form, TuioListener
 
         this.Shown += (s, e) => LoadQuestion();
 
-        // Subscribe to gesture router
+        // Subscribe to gesture router (legacy marker + named gestures)
         this.Shown += (s, e) => { GestureRouter.OnGestureMarker += HandleGestureMarker; };
         this.FormClosed += (s, e) => { GestureRouter.OnGestureMarker -= HandleGestureMarker; };
+        this.Shown += (s, e) => { GestureRouter.OnGestureRecognized += HandleGestureName; };
+        this.FormClosed += (s, e) => { GestureRouter.OnGestureRecognized -= HandleGestureName; };
+    }
+
+    /// <summary>
+    /// Quiz/Spelling hand-gesture handler: SwipeLeft / Checkmark /
+    /// SwipeRight pick answer A / B / C respectively. Circle closes.
+    /// </summary>
+    private void HandleGestureName(string name, float score)
+    {
+        if (!this.Visible || this.IsDisposed) return;
+        try
+        {
+            this.BeginInvoke((MethodInvoker)delegate
+            {
+                if (this.IsDisposed) return;
+                switch (name)
+                {
+                    case "SwipeLeft":  TryAnswer(0); break;
+                    case "Checkmark":  TryAnswer(1); break;
+                    case "SwipeRight": TryAnswer(2); break;
+                    case "Circle":     this.Close(); break;
+                }
+            });
+        }
+        catch { }
     }
 
     private void BuildUI()

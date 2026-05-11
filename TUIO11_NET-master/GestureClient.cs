@@ -6,11 +6,27 @@ using Newtonsoft.Json.Linq;
 
 public static class GestureRouter
 {
+    /// <summary>
+    /// Legacy marker route — fires the synthetic TUIO-marker equivalent of a
+    /// recognised gesture. HomePage uses this to "simulate marker placement".
+    /// </summary>
     public static event Action<int> OnGestureMarker;
+
+    /// <summary>
+    /// Richer route — gesture name + score. Pages that need context-aware
+    /// behaviour (EnrollmentPage letter cycling, LessonPage term cycling)
+    /// subscribe here instead of the marker route.
+    /// </summary>
+    public static event Action<string, float> OnGestureRecognized;
 
     public static void RouteGesture(int markerId)
     {
         OnGestureMarker?.Invoke(markerId);
+    }
+
+    public static void RouteGestureRecognized(string name, float score)
+    {
+        OnGestureRecognized?.Invoke(name, score);
     }
 }
 
@@ -96,15 +112,38 @@ public class GestureClient : IDisposable
             string jsonStr = data.Substring(start, end - start + 1);
             JObject json = JObject.Parse(jsonStr);
 
-            if (json.ContainsKey("gesture"))
+            // The Python server broadcasts both a typed envelope
+            //   {"type":"gesture","gesture":"Circle","score":0.78}
+            // and a legacy
+            //   {"gesture":"Circle","score":0.78}
+            // We only need to act once per recognition. Use the typed
+            // envelope when present, otherwise the legacy shape.
+            string envelopeType = json["type"]?.ToString();
+            bool isLegacy = envelopeType == null && json.ContainsKey("gesture");
+            bool isTyped  = envelopeType == "gesture";
+            if (!isTyped && !isLegacy) return;
+            if (isLegacy) return; // skip duplicate; the typed envelope is sent first
+
+            string gesture = json["gesture"]?.ToString();
+            if (string.IsNullOrEmpty(gesture)) return;
+
+            float score = json["score"]?.Value<float>() ?? 0f;
+
+            // Context-aware listeners
+            GestureRouter.RouteGestureRecognized(gesture, score);
+
+            // Legacy universal marker fallback — HomePage already maps a
+            // marker placement to the right action, so emitting an integer
+            // gives the simple path (login, enroll trigger, back) for free.
+            int markerId = MapGestureToMarker(gesture);
+            if (markerId != -1)
             {
-                string gesture = json["gesture"].ToString();
-                int markerId = MapGestureToMarker(gesture);
-                if (markerId != -1)
-                {
-                    Console.WriteLine($"[GestureClient] {gesture} -> Marker {markerId}");
-                    GestureRouter.RouteGesture(markerId);
-                }
+                Console.WriteLine($"[GestureClient] {gesture} ({score:F2}) -> marker {markerId}");
+                GestureRouter.RouteGesture(markerId);
+            }
+            else
+            {
+                Console.WriteLine($"[GestureClient] {gesture} ({score:F2}) -> context-only");
             }
         }
         catch (Exception ex)
@@ -113,15 +152,27 @@ public class GestureClient : IDisposable
         }
     }
 
+    /// <summary>
+    /// Universal "if no page handles this gesture contextually" map.
+    /// Pages that want different behaviour for a gesture subscribe to
+    /// OnGestureRecognized directly and ignore the marker route.
+    /// </summary>
     private int MapGestureToMarker(string gesture)
     {
-        switch (gesture?.ToUpper())
+        if (string.IsNullOrEmpty(gesture)) return -1;
+        switch (gesture)
         {
-            case "START": return 3;   // point_up → Vocabulary
-            case "CONFIRM": return 4;   // open_palm → Grammar
-            case "STOP": return 20;  // stop_sign → Back
-            default: return -1;
+            case "Circle":     return 10;  // HomePage enroll trigger
+            case "Checkmark":  return 4;   // Universal "confirm / pick / keep"
+            case "SwipeRight": return 7;   // Universal "next / advance / done"
+            case "SwipeLeft":  return 20;  // Universal "back / cancel"
+
+            // Legacy aliases (older gesture servers may still emit these)
+            case "START":   return 3;
+            case "CONFIRM": return 4;
+            case "STOP":    return 20;
         }
+        return -1;
     }
 
     public void Disconnect()

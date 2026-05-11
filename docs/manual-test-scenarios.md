@@ -1,6 +1,8 @@
-# Manual Test Scenarios — Face ID + Gaze Tracking
+# Manual Test Scenarios — Face ID + Gaze + Hand Gestures over TUIO
 
-How to verify the dual-login race, marker-driven enrollment, and gaze-session adaptation end-to-end using a real TUIO surface (reacTIVision + webcam).
+How to verify the dual-login race, marker-driven enrollment, gaze-session adaptation, **and the new hand-gesture parallel input path** end-to-end using a real TUIO surface (reacTIVision + webcam).
+
+Hand gestures are an **additional** input — TUIO markers always work too. Use whichever you want (or both) and compare the experience at the end.
 
 ---
 
@@ -11,114 +13,182 @@ Run these once before any scenario.
 | Component | Command | Port |
 |---|---|---|
 | reacTIVision (or the TUIO simulator) | `reacTIVision.exe` (Windows) — sends fiducial markers via OSC | 3333 → 127.0.0.1 |
-| Face / gaze webcam | Plug in + close any app that may be holding the camera | n/a |
+| Face / gaze / gesture webcam | Plug in + close any app that may be holding the camera | n/a |
 | Face server | `python TUIO11_NET-master\FaceID\face_recognition_server.py` | 5001 |
 | Gaze server | `python TUIO11_NET-master\FaceID\gaze_tracking_server.py` | 5002 |
-| Gesture server (optional) | `python TUIO11_NET-master\FaceID\yolo_tracking_server.py` | 5003 |
+| **Gesture server** (new) | `python TUIO11_NET-master\FaceID\gesture_recognition_server.py` | **5000** |
+| YOLO vision server (optional) | `python TUIO11_NET-master\FaceID\yolo_tracking_server.py` | 5003 |
 | Emotion server (optional) | `python TUIO11_NET-master\mock_emotion_server.py` | 5005 |
 | Main app | `TUIO11_NET-master\bin\Debug\TuioDemo.exe` | listens on TUIO 3333 |
+
+**Gesture server first-time install:**
+```
+pip install dollarpy mediapipe opencv-python numpy
+```
+MediaPipe officially supports Python 3.9–3.12; use that range to avoid wheel issues on 3.13/3.14.
 
 **Before each scenario:**
 - Back up `Data\users.json` and `Data\gaze_reports\` (in case you want to roll back).
 - Make sure at least one user exists in `Data\users.json` with a face folder under `Data\face_images\<userId>\`.
 
-**Marker map (the ones you'll actually print):**
+---
+
+## The two input vocabularies, side by side
+
+### TUIO markers (physical fiducials on the surface)
 
 | Marker | Where | Action |
 |---|---|---|
-| 10 | HomePage | Open the enrollment wizard |
-| 20 | Any wizard step | Cancel wizard |
-| 3 / 4 / 5 | Various | Step-specific picks |
-| 6 | Enrollment step 2 + lesson pages | Rotation = cycle |
-| 7 | Enrollment step 2 + step 5 | Done / save |
-| 21–30 | HomePage | Circular settings menu (Display/Audio/System) — do NOT use for enrollment |
+| 10 | HomePage | Open enrollment wizard |
+| 20 | Almost every page | Cancel / Back / Close |
+| 3 / 4 / 5 | Various | Step-specific picks (e.g. Beginner / Intermediate / Advanced) |
+| 6 | Enrollment step 2 + LessonPage | Rotation = cycle items |
+| 7 | Enrollment step 2 + step 5 | Done / Save / Advance |
+| 21–30 | HomePage | Circular settings menu (Display/Audio/System) |
+
+### Hand gestures (recognised by `gesture_recognition_server.py` via MediaPipe + dollarpy)
+
+| Gesture | How to perform it in front of the webcam |
+|---|---|
+| **Circle** | Draw a full circle in the air with one arm raised; both LA (left-arm) and RA (right-arm) variants are trained, either works |
+| **Checkmark** | Trace a check (✓): short down-stroke then a longer up-stroke to the right |
+| **SwipeLeft** | Sweep one arm across your body, right → left |
+| **SwipeRight** | Sweep one arm across your body, left → right |
+
+The recogniser fires at most once every ~1.6 seconds per gesture (cooldown). It expects a clear ~2-second stroke; jittering won't trigger.
+
+### Universal gesture → action mapping
+
+When a page hasn't subscribed for context-specific gesture handling, gestures fall back to a simulated TUIO marker:
+
+| Gesture | Default marker | Effect (legacy fallback) |
+|---|---|---|
+| **Circle** | marker 10 | Triggers the HomePage enroll wizard (only meaningful on HomePage) |
+| **Checkmark** | marker 4 | Universal "confirm / pick / keep" |
+| **SwipeRight** | marker 7 | Universal "next / advance / done" |
+| **SwipeLeft** | marker 20 | Universal "back / cancel" |
+
+Page-specific contextual mappings (EnrollmentPage, LessonPage, Quiz, Spelling) are listed inside each scenario below.
 
 ---
 
 ## Scenario A — Dual login: face wins
 
-**Goal:** verify that face login completes within ~8s and that the HUD confidence ticker updates live.
+**Goal:** verify face login completes within ~8s and the HUD confidence ticker updates live.
 
 1. Start the face server. Watch its console — you should see `[Server] Trained recognizer with N image(s) from M player(s)`.
-2. Start the app. Within 1s the HomePage should show:
-   - Top-right HUD: status "Scanning..." over the pulsing scan ring.
-   - Footer: "Scanning for player...".
-3. Sit facing the camera. After 1–2 frames the HUD sub-label should change to:
+2. Start the app. Within 1s the HomePage HUD shows the pulsing scan ring with status "Scanning...".
+3. Sit facing the camera. The HUD sub-label should change frame by frame:
    ```
-   Scanning... (0.34)        ← first sub-threshold scan
+   Scanning... (0.34)         ← first sub-threshold scan
    Scanning... (0.61)
-   Recognising Shahd (0.81)  ← when matched=true
+   Recognising Shahd (0.81)   ← matched=true
    ```
-4. Within ~8s, when a frame has confidence ≥ 0.75, the HUD turns green and shows `Welcome, <Name>!`. TTS says "Welcome, X. Loading … Padel training."
+4. Within ~8s, when confidence ≥ 0.75, the HUD turns green: `Welcome, <Name>!`. TTS speaks the greeting.
 5. After 2s the app navigates to LearningPage.
 
-**Pass criteria:**
-- The numeric confidence appears in the HUD and visibly changes each frame.
-- A known face triggers navigation in under 8s.
-- An unknown face never triggers navigation (confidence stays below 0.75).
+This scenario uses **no markers and no gestures** — login is passive.
 
-**Failure modes to look for:**
-- HUD frozen at `Scanning...` with no ticker → C# isn't getting `face_scan` events → check `[FaceIDClient] Reply: face_scan ...` lines on the app's console; if absent, the server is sending the old protocol or isn't running.
-- App jumps to LearningPage with name = "Unknown" → `face_detected` came through but no users.json match by Name/FaceId/UserId.
+**Pass:** confidence ticks up, log-in completes in <8s, navigation to LearningPage (Players) or AdminDashboardPage (Admin role).
 
 ---
 
 ## Scenario B — Dual login: Bluetooth wins
 
-**Goal:** verify that an already-paired phone logs the user in before the face task finishes.
+**Goal:** verify a paired phone logs the user in before the face task finishes.
 
-1. Make sure your phone is paired to the Windows Bluetooth stack and its MAC matches a `BluetoothId` in `users.json` (or matches the admin MAC `E8:3A:12:40:1A:70` to land on AdminDashboard).
-2. Start the app. While the face HUD is still scanning, the Bluetooth task is running silently in parallel.
-3. Within ~1–2s of the BT scan picking up your device, the HUD jumps straight to `Welcome, <Name>!` with `Bluetooth login` in the sub-label.
-4. App navigates to LearningPage (or AdminDashboard for the admin MAC).
+1. Pair your phone to Windows Bluetooth. Its MAC must match a `BluetoothId` in `users.json` (or admin MAC `E8:3A:12:40:1A:70` to land on AdminDashboard).
+2. Start the app. Bluetooth task runs in parallel with face task.
+3. Within ~1–2s the HUD jumps to `Welcome, <Name>!` with `Bluetooth login` in the sub-label.
+4. App navigates to LearningPage (or AdminDashboard).
 
-**Pass criteria:**
-- Bluetooth login wins **without waiting** for the face task to time out.
-- The HUD's `Source` text says `Bluetooth`, not `Face`.
+Again no markers/gestures — this is automatic.
+
+**Pass:** Bluetooth wins without waiting for face timeout. HUD says `Bluetooth`, not `Face`.
 
 ---
 
-## Scenario C — New player enrolment (marker-driven)
+## Scenario C — New player enrolment (TUIO **and** gesture paths)
 
-**Goal:** verify the full 5-step wizard saves a usable new player.
+**Goal:** verify the full 5-step wizard saves a usable new player, via either input method.
 
-1. From HomePage HUD with no login yet, place **marker 10** on the surface.
-2. The app should hide HomePage and open the Enrollment wizard ("1 / 5 — Face Capture").
-3. **Step 1 (Face Capture):**
-   - 3-2-1 countdown then `Capturing 5 photos…`.
-   - After ~3.5s the message changes to `Captured 5 photos. Marker 4 = keep • 5 = retake • 20 = cancel.` Five thumbnails appear below.
-   - Place **marker 4** → advance to step 2.
-4. **Step 2 (Name):**
-   - `_` placeholder above an A-Z strip with `[A]` highlighted.
-   - **Rotate marker 6** clockwise → highlight cycles A → B → C → …
-   - Place **marker 4** to commit the current letter (appears in the name above).
-   - Place **marker 5** to backspace if needed.
-   - Place **marker 7** when the name has at least one letter → advance to step 3.
-5. **Step 3 (Level):** place marker **3** (Beginner), **4** (Intermediate), or **5** (Advanced) → step 4.
-6. **Step 4 (Gender):** place marker **3** (Male), **4** (Female), or **5** (Skip) → step 5.
-7. **Step 5 (Confirm):** summary shows name + level + gender. Place **marker 7** to save.
-8. Within 1.5s the wizard closes and HomePage shows the welcome HUD with the new user, then navigates to LearningPage.
+The wizard accepts both inputs concurrently — you can mix and match within one run (e.g. open the wizard with a gesture, type the name via swipes, save with a marker).
 
-**Pass criteria (verify on disk):**
-- `Data\users.json` has a new entry whose `UserId` matches `usr_<8 hex>` and whose `Name`, `Level`, `Gender` match what you entered.
-- `Data\face_images\<UserId>\1.jpg ... 5.jpg` exist.
+### Step 0 — open the wizard
+- **TUIO:** place **marker 10** on the surface.
+- **Gesture:** perform **Circle**.
+
+HomePage hides, the wizard opens at "1 / 5 — Face Capture".
+
+### Step 1 — Face Capture
+1. 3-2-1 countdown → `Capturing 5 photos…` → ~3.5s → `Captured 5 photos. Marker 4 = keep • 5 = retake • 20 = cancel.` Five thumbnails appear.
+2. Choose:
+
+| Action | TUIO | Gesture |
+|---|---|---|
+| Keep photos, advance to step 2 | marker **4** | **Checkmark** |
+| Retake all 5 photos | marker **5** | **SwipeRight** |
+| Cancel the whole wizard | marker **20** | **SwipeLeft** *or* **Circle** |
+
+### Step 2 — Name (rotation spelling)
+A `_` placeholder over an A–Z strip with `[A]` highlighted.
+
+| Action | TUIO | Gesture |
+|---|---|---|
+| Cycle highlight to next letter | rotate **marker 6** clockwise (~18°/letter) | **SwipeRight** |
+| Cycle highlight to previous letter | rotate **marker 6** counter-clockwise | **SwipeLeft** |
+| Commit the highlighted letter to the name | place **marker 4** | **Checkmark** |
+| Backspace last letter | place **marker 5** | *(no gesture — use marker 5)* |
+| Done — name is complete, advance to step 3 | place **marker 7** | **Circle** |
+| Cancel the whole wizard | place **marker 20** | *(no gesture in this step — use marker 20)* |
+
+Spelling "TESTER" with gestures: SwipeRight×19 (A→T), Checkmark, SwipeRight×... etc. Slow but works.
+
+### Step 3 — Level
+
+| Action | TUIO | Gesture |
+|---|---|---|
+| Beginner | marker **3** | **SwipeLeft** |
+| Intermediate | marker **4** | **Checkmark** |
+| Advanced | marker **5** | **SwipeRight** |
+| Cancel | marker **20** | **Circle** |
+
+### Step 4 — Gender (skippable)
+
+| Action | TUIO | Gesture |
+|---|---|---|
+| Male | marker **3** | **SwipeLeft** |
+| Female | marker **4** | **Checkmark** |
+| Skip | marker **5** | **SwipeRight** |
+| Cancel | marker **20** | **Circle** |
+
+### Step 5 — Confirm
+Summary shows name + level + gender.
+
+| Action | TUIO | Gesture |
+|---|---|---|
+| Save and auto-login the new user | marker **7** | **Checkmark** |
+| Start over (clear all, back to step 1) | marker **5** | **SwipeLeft** |
+| Cancel without saving | marker **20** | **Circle** |
+
+### Verify on disk
+- `Data\users.json` has a new entry with `UserId == usr_<8 hex>`, plus correct `Name` / `Level` / `Gender`.
+- `Data\face_images\<UserId>\1.jpg … 5.jpg` exist.
 - `Data\users.json.bak` exists (atomic save's previous version).
-- Close the app, restart it, the new user should be recognised via face within ~8s (server reloaded after enroll_done).
-
-**Failure modes to check:**
-- "Camera timed out" message → server didn't get any face into `latest_frame` within 15s; check the server console for `[Server] Enroll <id>: saved …` lines. If zero saves, your face wasn't detected — try better lighting.
-- Wizard saves but the name is empty → bug in step 2 commit (marker 4 not registering); confirm marker IDs on your prints match.
+- Restart the app → log in as the new user via face → succeeds without restarting the Python servers.
 
 ---
 
 ## Scenario D — Cancel mid-enrolment
 
-1. Open the wizard (marker 10). Capture photos through step 1.
-2. At any point, place **marker 20**.
+1. Open the wizard (marker 10 or Circle gesture). Capture photos through step 1.
+2. At any step, cancel:
+   - **TUIO:** marker **20**
+   - **Gesture:** **SwipeLeft** at step 1 or **Circle** at any other step
 3. Wizard closes immediately. HomePage shows again and dual-login restarts.
 
-**Pass criteria:**
-- `Data\face_images\<UserId>\` directory is deleted (no orphan photos for the abandoned `UserId`).
+**Pass:**
+- `Data\face_images\<UserId>\` is deleted (no orphan photos).
 - `Data\users.json` is unchanged.
 - Server console shows `[Server] Command: enroll_cancel user=usr_<id>`.
 
@@ -126,116 +196,169 @@ Run these once before any scenario.
 
 ## Scenario E — Gaze session report is written
 
-**Goal:** verify a fresh gaze session lands in `Data\gaze_reports\<userId>_history.json` when LearningPage closes.
+**Goal:** verify the gaze session lands in `Data\gaze_reports\<userId>_history.json` when LearningPage closes.
 
 1. Log in as any user (face or BT).
-2. On LearningPage, deliberately stare at each of the six cards for 5–10 seconds each. Keep gaze inside the card's screen region; the regions are roughly:
-   - Top row: Strokes (left) · Rules (middle) · Practice (right)
-   - Bottom row: Quiz (left) · Spelling (middle) · Competition (right)
-3. Place **marker 20** to close LearningPage and return to HomePage.
-4. Open `Data\gaze_reports\<UserId>_history.json` in a text editor.
+2. On LearningPage, stare at each of the six cards for 5–10s. Cards are arranged:
+   ```
+   ┌────────────┬────────────┬────────────┐
+   │  Strokes   │   Rules    │  Practice  │
+   ├────────────┼────────────┼────────────┤
+   │   Quiz     │  Spelling  │ Competition│
+   └────────────┴────────────┴────────────┘
+   ```
+3. Stare deliberately longer at **one** specific card (say `Rules`) for 20+s.
+4. Close LearningPage:
+   - **TUIO:** marker **20**
+   - **Gesture:** **SwipeLeft** (Circle does NOT close LearningPage — Circle on HomePage opens enroll; LearningPage's cancel is SwipeLeft via universal-marker-20 mapping)
+5. Open `Data\gaze_reports\<UserId>_history.json`.
 
-**Pass criteria:**
-- File exists.
-- An entry is appended whose `Timestamp` matches the session you just ran.
-- `DurationSeconds` ≈ wall-clock time you spent on LearningPage.
-- `CardDwellTimes` has non-zero values for whichever cards you looked at.
-- `SessionScores` is a six-key dictionary with 0–100 values.
+**Pass:**
+- New entry timestamped now.
+- `DurationSeconds` ≈ wall-clock session time.
+- `CardDwellTimes` non-zero for the cards you looked at.
 - `DominantCategory` is whichever card you stared at most.
-
-**If `CardDwellTimes` is all zeros:**
-- `TotalFixations` likely also zero → no gaze points came in. Check:
-  - Gaze server console for `[GazeServer] gaze x=… y=…` style log.
-  - C# console for `[GazeClient] Connected!`.
-  - If both look healthy but no points arrive, the server may be sending events in a format the C# client doesn't recognise. Expected payload is `{"type":"gaze","x":0.45,"y":0.62}` with coordinates in `[0, 1]`.
 
 ---
 
-## Scenario F — Next-session "Picked up from last time" highlight
+## Scenario F — "Picked up from last time" highlight cycle
 
-**Goal:** verify the system actually reads the previous session's report and highlights the card the user used most.
+**Goal:** verify each session reads the previous one and highlights the most-used card.
 
-1. Run Scenario E once. Let's say you stared at `Rules` the most → its `DominantCategory` is `Rules`.
-2. Close LearningPage. Make sure the report was written (check the JSON timestamp).
-3. Log in again **as the same user**. Open LearningPage.
-4. Inside ~1s after LearningPage opens, the `Rules` card should:
-   - Get a gentle pulsing gold border.
-   - Show a **"Picked up from last time!"** ribbon in its top-right corner.
-5. Other cards keep their normal classification (Neglected ones still glow teal with "New for you!", UnderFocused ones get the orange "Try this!" outline).
+1. Run Scenario E once, focusing on `Rules`. Confirm the report ends with `"DominantCategory": "Rules"`.
+2. Log in again **as the exact same user** (face or BT).
+3. Within ~1s of LearningPage opening, the `Rules` card glows gold with a "Picked up from last time!" ribbon.
+4. Close (marker 20 or SwipeLeft) and re-run focusing on `Quiz`. Next session, `Quiz` is highlighted instead.
 
-**Pass criteria:**
-- The highlighted card matches the `DominantCategory` field in the *last* report file.
-- The ribbon text is literally `Picked up from last time!`.
-- The highlight changes each session — i.e. if you spend the next session staring at `Quiz` instead, the **following** session highlights `Quiz`, not `Rules`.
-
-**Quick way to force a specific dominant:** stare at one card for the whole 30 seconds, then close. Next session that card gets the gold ribbon regardless of cumulative history.
+**Pass:** the highlighted card matches the latest report's `DominantCategory` and changes every session.
 
 ---
 
 ## Scenario G — Per-user isolation
 
-**Goal:** make sure user A's history doesn't bleed into user B.
+1. Log in as **User A**, focus on `Strokes`, close.
+2. Log in as **User B**, focus on `Competition`, close.
+3. Log back in as A → `Strokes` glows. Log back in as B → `Competition` glows.
 
-1. Log in as user A. Run a session focused on `Strokes`. Close.
-2. Log in as user B (different face / BT). Run a session focused on `Competition`. Close.
-3. Log back in as user A → `Strokes` should be highlighted (not `Competition`).
-4. Log in as user B → `Competition` should be highlighted (not `Strokes`).
-
-**Pass criteria:**
-- `Data\gaze_reports\` has two separate `<UserId>_history.json` files, one per user.
-- Each one only contains that user's sessions.
-- The highlighted card matches each user's own last `DominantCategory`.
-
-This is the key test for the by-`UserId` fix in `AnalyticsEngine.PersistUsers`.
+**Pass:** `Data\gaze_reports\` has two files, each per-user. No cross-contamination.
 
 ---
 
-## Scenario H — Server reload after enrolment
+## Scenario H — LessonPage navigation (cycling padel terms)
 
-**Goal:** verify a freshly enrolled face is recognised on the very next login, without restarting the Python server.
+**Goal:** verify the lesson page accepts both rotation and swipes for cycling through padel terms.
 
-1. Run Scenario C to enrol a new user "TESTER".
-2. The wizard's confirm step sends a `reload` command after save. The server console should print:
-   ```
-   [Server] Command: reload
-   [Server] Trained recognizer with N image(s) from M+1 player(s)
-   ```
-3. Log out (close LearningPage → marker 20 from inside it).
-4. Sit in front of the camera as "TESTER". Within ~8s the HUD should match `TESTER`.
+1. From LearningPage, open Padel Shots (Beginner level):
+   - **TUIO:** place **marker 3** to open Beginner level → place **marker 3** again to open Padel Shots.
+   - **Gesture:** the universal map fires marker 4 on Checkmark — opens Padel Rules instead. (No gesture for "marker 3" specifically. Use TUIO for level/category selection here.)
+2. Once a LessonPage is open, cycle terms:
 
-**Pass criteria:**
-- No need to restart `face_recognition_server.py` between enrolment and the first auto-login of the new user.
+| Action | TUIO | Gesture |
+|---|---|---|
+| Next padel term | rotate **marker 6** clockwise | **SwipeRight** |
+| Previous padel term | rotate **marker 6** counter-clockwise | **SwipeLeft** |
+| Replay the term's voice | (use keyboard Space, or wait for auto-replay) | **Checkmark** |
+| Close LessonPage | place **marker 20** | **Circle** |
+
+**Pass:** swipes advance terms one at a time matching the rotation behaviour.
 
 ---
 
-## Scenario I — Live confidence ticker (HCI rubric)
+## Scenario I — Quiz / Speed Mode
 
-**Goal:** the system shows transparent feedback on what it sees.
+**Goal:** verify the quiz pages let you pick A / B / C answers via gesture.
 
-1. Log out (return to HomePage).
-2. Watch the HUD sub-label as you do these things in front of the camera:
-   - Look directly at the camera → `Scanning… (0.65–0.85)`.
-   - Cover your face → numbers either freeze or drop because no face is detected.
-   - Show a face that's NOT in the trained set → `Scanning… (0.30–0.55)` (sub-threshold so no login).
-   - Show your own face → climbs toward 0.8+ and you're logged in.
+1. From LearningPage open Quick Challenge (Quiz) or Speed Mode (Spelling) via markers 6 / 7 (or gesture **SwipeRight** which fires marker 7 = Speed Mode).
+2. When a question shows three options (A, B, C):
 
-**Pass criteria:**
-- The confidence number actually updates between frames.
-- The number drops noticeably when you cover or turn away.
+| Action | TUIO | Gesture |
+|---|---|---|
+| Pick option **A** (leftmost) | marker **10** | **SwipeLeft** |
+| Pick option **B** (middle) | marker **11** | **Checkmark** |
+| Pick option **C** (rightmost) | marker **12** | **SwipeRight** |
+| Close the quiz | marker **20** | **Circle** |
+
+**Pass:** the picked option is highlighted and scored exactly as with markers.
+
+---
+
+## Scenario J — Live confidence ticker (HCI rubric, face only)
+
+While on HomePage, watch the HUD sub-label as you:
+- Look directly at the camera → ticker climbs to 0.65–0.85.
+- Cover your face → ticker freezes / drops.
+- Show a non-enrolled face → 0.30–0.55 (sub-threshold, no login).
+- Show your enrolled face → climbs >0.75 and you log in.
+
+**Pass:** number visibly updates each frame.
+
+---
+
+## Scenario K — Gesture recogniser sanity check (do this once before C / H / I)
+
+**Goal:** verify the gesture server is actually firing events.
+
+1. Start `gesture_recognition_server.py`. Console should print:
+   ```
+   [GestureServer] Loaded recogniser with 7 templates
+   [GestureServer] TCP listening on 127.0.0.1:5000
+   [GestureServer] Camera open. Watching for gestures...
+   ```
+2. Start the app. App console should print `[GestureClient] Connected!`.
+3. Stand back from the webcam so your full upper body is visible. Perform each of the four gestures slowly and deliberately.
+4. The app console should print one line per recognition:
+   ```
+   [GestureClient] Circle (0.78) -> marker 10
+   [GestureClient] Checkmark (0.81) -> marker 4
+   [GestureClient] SwipeRight (0.72) -> marker 7
+   [GestureClient] SwipeLeft (0.69) -> marker 20
+   ```
+5. The server console should print the raw recognition + canonicalisation:
+   ```
+   [GestureServer] LACheckmark -> Checkmark  score=0.81
+   ```
+
+**Pass:** each gesture lands on the correct canonical name with score ≥ 0.55. Misfires (e.g. random arm movement triggering a Circle) are rare.
+
+**Tune if needed:** open `gesture_recognition_server.py` and adjust:
+- `MIN_SCORE = 0.55` — raise to be stricter (fewer false positives, more genuine gestures rejected); lower to be looser.
+- `MIN_MOTION_PX = 80.0` — raise so a still pose doesn't trigger; lower for smaller gestures.
+- `COOLDOWN_SECONDS = 1.6` — raise to debounce more aggressively.
 
 ---
 
 ## Cleanup after testing
 
-1. Restore `Data\users.json` from the backup if you don't want to keep the test user.
-2. Delete `Data\face_images\<test-UserId>\` and the corresponding `Data\gaze_reports\<test-UserId>_history.json` if you want a clean slate.
-3. Optional: delete `Data\users.json.bak` (created by the atomic save).
+1. Restore `Data\users.json` from backup if you don't want to keep the test user.
+2. Delete `Data\face_images\<test-UserId>\` and the matching `Data\gaze_reports\<test-UserId>_history.json`.
+3. Optional: delete `Data\users.json.bak`.
 
 ---
 
-## Known limitations during testing
+## TUIO vs Hand Gestures — what to compare
 
-- The OpenCV LBPH recogniser is conservative. If your test environment has dim lighting or the original enrolled reference photo was taken in different lighting, confidence may stay just below the 0.75 threshold. Re-enrol if needed.
-- Gaze tracking accuracy depends on the Python gaze server's calibration. Wildly off-center gaze points will be detected but mapped to whichever region they fall into, which can throw off `DominantCategory`.
-- The face server pauses recognition for ~3s during an `enroll` command — if a second user walks up and tries to face-login mid-enrolment they'll see no response until enrolment finishes.
-- During Scenario E, `marker 20` is the only correct way to end the session. Closing via Alt+F4 / window X still triggers `OnFormClosed` and persists the report, but make sure your TUIO surface isn't generating phantom markers during shutdown.
+Once you've run the same scenario both ways, the comparison axes are:
+
+| Axis | TUIO markers | Hand gestures |
+|---|---|---|
+| **Latency** | ~100ms (marker placement → event) | ~1.5–2s (full stroke + recognition + cooldown) |
+| **Precision** | exact, deterministic — marker 4 is always marker 4 | probabilistic — score is 0–1, some misfires |
+| **Setup cost** | print fiducial sheet + reacTIVision running | none (just webcam) |
+| **Continuous input** | rotation is natural (marker 6) | discrete only — must swipe N times to cycle N steps |
+| **Range of vocabulary** | 30+ unique markers possible | only the 4 trained classes |
+| **Hands-free** | requires hands on the surface | requires hands but no contact |
+| **Discoverability** | each marker is a separate physical object | learner has to know each gesture |
+| **Failure mode** | marker not seen by camera = no event | wrong gesture matched = wrong action |
+
+The gesture path is best for **simple yes/no/next/back** decisions and for users who don't have the marker set physically with them. TUIO remains better for precision, continuous input (rotation), and rich vocabulary (>4 actions on the same page).
+
+---
+
+## Known limitations
+
+- LBPH face confidence is conservative. Dim lighting or pose changes can hold a known face below the 0.75 threshold — re-enrol if needed.
+- Gaze tracking accuracy depends on the gaze server's calibration.
+- The face server pauses recognition for ~3s during an `enroll` command — a second user trying to face-login mid-enrolment won't get a response until enrolment finishes.
+- Hand gestures require ~2-second strokes with clear arm motion; tiny hand-only gestures don't trigger (MediaPipe Pose tracks the whole body, including shoulder + elbow + wrist).
+- Only the four canonical gestures are recognised; anything outside that set (a wave, a fist, etc.) is silently ignored.
+- The `Skelaton/DynamicPatternsPadel/` set (Forehand / Backhand / Volleys) is **not** wired into this UI — it's coaching content for the AI Vision Coach page, not navigation.
