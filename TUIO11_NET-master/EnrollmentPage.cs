@@ -64,6 +64,7 @@ public class EnrollmentPage : Form, TuioListener
 
         BuildUI();
         FaceIDRouter.OnServerReply += HandleServerReply;
+        GestureRouter.OnGestureRecognized += HandleGestureRecognized;
 
         this.Shown += (s, e) =>
         {
@@ -74,6 +75,7 @@ public class EnrollmentPage : Form, TuioListener
         {
             try { if (_tuio != null) _tuio.removeTuioListener(this); } catch { }
             FaceIDRouter.OnServerReply -= HandleServerReply;
+            GestureRouter.OnGestureRecognized -= HandleGestureRecognized;
             _captureCountdown?.Stop();
             _captureCountdown?.Dispose();
             _enrollWatchdog?.Stop();
@@ -434,6 +436,81 @@ public class EnrollmentPage : Form, TuioListener
             else                   sb.Append(c);
         }
         _lblAlphaStrip.Text = sb.ToString();
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    //  Hand-gesture handler — maps Circle/Checkmark/SwipeLeft/SwipeRight
+    //  into step-appropriate actions. The universal fallback in
+    //  GestureClient already covers HomePage and the trivial cases; this
+    //  is for the things markers do that no single gesture maps onto
+    //  (letter cycling, asymmetric level/gender picks).
+    // ─────────────────────────────────────────────────────────────────
+    private void HandleGestureRecognized(string name, float score)
+    {
+        if (this.IsDisposed || _completed) return;
+        if (string.IsNullOrEmpty(name)) return;
+
+        this.BeginInvoke((MethodInvoker)(() =>
+        {
+            if (this.IsDisposed || _completed) return;
+
+            // Universal cancel — any step, Circle when we're in a step
+            // that benefits from a quick exit (handled by individual cases
+            // for nuance).
+            switch (_step)
+            {
+                case Step.FaceCapture:
+                    if (!_step1AcceptReady && name != "Circle" && name != "SwipeLeft") return;
+                    if (name == "Checkmark")        EnterStep(Step.Name);                // keep
+                    else if (name == "SwipeRight")  { SendEnrollCancel(); EnterStep(Step.FaceCapture); } // retake
+                    else if (name == "SwipeLeft" || name == "Circle") CancelWizard();
+                    break;
+
+                case Step.Name:
+                    if (name == "SwipeRight")
+                    {
+                        _letterIndex = (_letterIndex + 1) % 26;
+                        RenderSpelling();
+                    }
+                    else if (name == "SwipeLeft")
+                    {
+                        _letterIndex = (((_letterIndex - 1) % 26) + 26) % 26;
+                        RenderSpelling();
+                    }
+                    else if (name == "Checkmark") HandleNameMarker(4);  // commit
+                    else if (name == "Circle")    HandleNameMarker(7);  // done
+                    break;
+
+                case Step.Level:
+                    if (name == "SwipeLeft")       HandleLevelMarker(3); // Beginner
+                    else if (name == "Checkmark")  HandleLevelMarker(4); // Intermediate
+                    else if (name == "SwipeRight") HandleLevelMarker(5); // Advanced
+                    else if (name == "Circle")     CancelWizard();
+                    break;
+
+                case Step.Gender:
+                    if (name == "SwipeLeft")       HandleGenderMarker(3); // Male
+                    else if (name == "Checkmark")  HandleGenderMarker(4); // Female
+                    else if (name == "SwipeRight") HandleGenderMarker(5); // Skip
+                    else if (name == "Circle")     CancelWizard();
+                    break;
+
+                case Step.Confirm:
+                    if (name == "Checkmark")       HandleConfirmMarker(7); // save
+                    else if (name == "SwipeLeft")  HandleConfirmMarker(5); // start over
+                    else if (name == "Circle")     CancelWizard();
+                    break;
+            }
+        }));
+    }
+
+    private void CancelWizard()
+    {
+        if (_completed) return;
+        _completed = true;
+        SendEnrollCancel();
+        try { _onCompleted?.Invoke(null); } catch { }
+        this.Close();
     }
 
     // ─────────────────────────────────────────────────────────────────
