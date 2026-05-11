@@ -529,6 +529,8 @@ public class CompetitionMode : Form, TuioListener
             string path = Path.Combine(Application.StartupPath, "Data", name);
             if (!File.Exists(path))
                 path = Path.Combine(Application.StartupPath, name);
+            if (!File.Exists(path))
+                path = Path.Combine(Application.StartupPath, "Images", name);
             if (!File.Exists(path)) return;
 
             using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read))

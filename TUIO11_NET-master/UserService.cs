@@ -112,9 +112,21 @@ public class UserService
         {
             Directory.CreateDirectory(Path.GetDirectoryName(RuntimePath));
             string json = JsonConvert.SerializeObject(list, Formatting.Indented);
-            File.WriteAllText(RuntimePath, json);
 
-            // Verify write succeeded
+            // Atomic write: full content to .tmp, then replace target.
+            string tmp = RuntimePath + ".tmp";
+            File.WriteAllText(tmp, json);
+
+            if (File.Exists(RuntimePath))
+            {
+                // File.Replace preserves the destination's ACLs and is atomic on NTFS.
+                File.Replace(tmp, RuntimePath, RuntimePath + ".bak");
+            }
+            else
+            {
+                File.Move(tmp, RuntimePath);
+            }
+
             string verify = File.ReadAllText(RuntimePath);
             Log($"SAVE  path={RuntimePath}  users={list.Count}  reason={reason}  verified={verify.Length > 2}");
         }

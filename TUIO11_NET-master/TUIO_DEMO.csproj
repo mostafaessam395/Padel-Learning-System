@@ -57,6 +57,8 @@
     <Compile Include="CompetitionMode.cs" />
     <Compile Include="ContentManagerPage.cs" />
     <Compile Include="ContentService.cs" />
+    <Compile Include="DualLoginManager.cs" />
+    <Compile Include="EnrollmentPage.cs" />
     <Compile Include="ExpressionClient.cs" />
     <Compile Include="FaceIDClient.cs" />
     <Compile Include="GazeClient.cs" />

@@ -12,6 +12,7 @@ using System.Media;
 using System.Net.Sockets;
 using System.Speech.Synthesis;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using TUIO;
@@ -756,15 +757,12 @@ public class HomePage : Form, TuioListener
 
     private double _bookAngle = 0.0;
     private System.Windows.Forms.Timer _bookTimer;
-    private System.Windows.Forms.Timer _bluetoothTimer;
     private List<UserData> cachedUsers = new List<UserData>();
 
     private GestureClient _gestureClient;
     private ExpressionClient _expressionClient;
     private System.Windows.Forms.Timer _reconnectTimer;
     private bool _isProcessingGesture = false;
-
-    private bool isScanningBluetooth = false;
 
     // ── Admin Bluetooth MAC ───────────────────────────────────────────────
     private const string ADMIN_BLUETOOTH_MAC = "E8:3A:12:40:1A:70";
@@ -773,7 +771,6 @@ public class HomePage : Form, TuioListener
     // ── Face Recognition ──────────────────────────────────
     private FaceIDClient _faceIDClient;
     private System.Windows.Forms.Timer _faceReconnectTimer;
-    private System.Windows.Forms.Timer _faceScanTimeoutTimer;
     private bool _faceLoginCompleted = false;
     private RoundedShadowPanel _faceScanHUD;
     private Label _faceScanStatusLabel;
@@ -782,6 +779,12 @@ public class HomePage : Form, TuioListener
     private System.Windows.Forms.Timer _facePulseTimer;
     private float _facePulsePhase = 0f;
     private SpeechSynthesizer _homeSynth;
+
+    // ── Dual login coordinator (parallel face + Bluetooth race) ─────────
+    private DualLoginManager _dualLogin;
+    private CancellationTokenSource _dualLoginCts;
+    private bool _enrollPageOpen = false;
+    private int _lastEnrollTrigger = -1;
 
     public HomePage(int port)
     {
@@ -804,11 +807,6 @@ public class HomePage : Form, TuioListener
         ApplyTheme();
         AppSettings.ThemeChanged += OnThemeChanged;
         cachedUsers = LoadUsersFromJson();
-
-        _bluetoothTimer = new System.Windows.Forms.Timer();
-        _bluetoothTimer.Interval = 100;
-        _bluetoothTimer.Tick += (s, e) => CheckBluetoothAndLogin();
-        // Bluetooth starts AFTER face scan timeout (5 s) — see InitializeFaceID()
 
         this.Load += (s, e) => ArrangeControls();
         this.Resize += (s, e) => ArrangeControls();
@@ -950,6 +948,8 @@ public class HomePage : Form, TuioListener
             string path = Path.Combine(Application.StartupPath, "Data", "2.png");
             if (!File.Exists(path))
                 path = Path.Combine(Application.StartupPath, "2.png");
+            if (!File.Exists(path))
+                path = Path.Combine(Application.StartupPath, "Images", "2.png");
             if (File.Exists(path))
             {
                 using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read))
@@ -1102,112 +1102,6 @@ public class HomePage : Form, TuioListener
         }
 
         return "";
-    }
-
-    private async void CheckBluetoothAndLogin()
-    {
-        if (pageOpen || _adminPageOpen) return;
-        if (currentUser != null) return;
-        if (isScanningBluetooth) return;
-
-        isScanningBluetooth = true;
-
-        try
-        {
-            lblFooter.Text = "Scanning for player device...";
-
-            string bluetoothId = await Task.Run(() => GetCurrentBluetoothId());
-
-            if (string.IsNullOrWhiteSpace(bluetoothId))
-            {
-                lblFooter.Text = "Waiting for Bluetooth connection...";
-                return;
-            }
-
-            // ── Route by Role from users.json ────────────────────────────
-            cachedUsers = LoadUsersFromJson();
-            var matchedUser = cachedUsers.FirstOrDefault(u =>
-                !string.IsNullOrEmpty(u.BluetoothId) &&
-                NormalizeMac(u.BluetoothId) == NormalizeMac(bluetoothId));
-
-            if (matchedUser == null)
-            {
-                lblFooter.Text = "Device detected, but player profile was not found.";
-                BtLog($"No user found for MAC {bluetoothId}");
-                return;
-            }
-
-            if (!matchedUser.IsActive)
-            {
-                lblFooter.Text = $"User '{matchedUser.Name}' is inactive. Contact admin.";
-                BtLog($"Login blocked: {matchedUser.Name} is inactive");
-                return;
-            }
-
-            BtLog($"Routing: name={matchedUser.Name} role={matchedUser.Role} level={matchedUser.Level}");
-
-            // ── Admin ─────────────────────────────────────────────────────
-            if (string.Equals(matchedUser.Role, "Admin", StringComparison.OrdinalIgnoreCase))
-            {
-                _adminPageOpen = true;
-                _bluetoothTimer.Stop();
-
-                lblFooter.Text      = "Admin device detected — opening Admin Dashboard...";
-                lblInstruction.Text = $"Welcome {matchedUser.Name}";
-                BtLog($"Opening AdminDashboardPage for {matchedUser.Name}");
-
-                var adminPage = new AdminDashboardPage(
-                    tuioClient:   client,
-                    adminName:    matchedUser.Name,
-                    btConnected:  true,
-                    gestureRef:   _gestureClient,
-                    faceRef:      _faceIDClient,
-                    gazeRef:      null);
-
-                adminPage.FormClosed += (s, e) =>
-                {
-                    _adminPageOpen = false;
-                    lblInstruction.Text = "Waiting to detect your player level automatically...";
-                    lblFooter.Text      = "Scanning for player...";
-                    this.Show();
-                    StartFaceScanWindow();
-                };
-
-                adminPage.Show();
-                this.Hide();
-                return;
-            }
-
-            // ── Player ────────────────────────────────────────────────────
-            currentUser = matchedUser;
-
-            lblFooter.Text      = "Player detected: " + currentUser.Name;
-            lblInstruction.Text = MapDetectedPlayerLevel(currentUser.Level);
-
-            pageOpen = true;
-            _bluetoothTimer.Stop();
-
-            Form page = new LearningPage(currentUser, client);
-
-            page.FormClosed += (s, e) =>
-            {
-                pageOpen = false;
-                currentUser = null;
-                _faceLoginCompleted = false;
-                lblInstruction.Text = "Waiting to detect your player level automatically...";
-                lblFooter.Text      = "Scanning for player...";
-                this.Show();
-                // Restart face scan first, then Bluetooth fallback after 5 s
-                StartFaceScanWindow();
-            };
-
-            page.Show();
-            this.Hide();
-        }
-        finally
-        {
-            isScanningBluetooth = false;
-        }
     }
 
     private void BuildUI()
@@ -1770,6 +1664,15 @@ public class HomePage : Form, TuioListener
             }));
             return;
         }
+
+        // Marker 10 → open enrollment wizard
+        if (o.SymbolID == 10)
+        {
+            if (_lastEnrollTrigger == 10) return;
+            _lastEnrollTrigger = 10;
+            this.BeginInvoke((MethodInvoker)(() => OpenEnrollmentPage()));
+            return;
+        }
     }
 
     public void removeTuioObject(TuioObject o)
@@ -1779,6 +1682,9 @@ public class HomePage : Form, TuioListener
 
         if (o.SymbolID == 30)
             this.BeginInvoke((MethodInvoker)(() => circMenu.HandleMarkerRemoved()));
+
+        if (o.SymbolID == 10)
+            _lastEnrollTrigger = -1;
     }
 
     public void updateTuioObject(TuioObject o)
@@ -1847,15 +1753,15 @@ public class HomePage : Form, TuioListener
         _expressionClient?.Disconnect();
         GestureRouter.OnGestureMarker -= HandleGestureMarker;
 
-        // Face ID cleanup
-        _faceScanTimeoutTimer?.Stop();
-        _faceScanTimeoutTimer?.Dispose();
+        // Face ID + dual-login cleanup
         _faceReconnectTimer?.Stop();
         _faceReconnectTimer?.Dispose();
         _facePulseTimer?.Stop();
         _facePulseTimer?.Dispose();
         _faceIDClient?.Disconnect();
-        FaceIDRouter.OnFaceRecognized -= HandleFaceRecognized;
+        FaceIDRouter.OnFaceScanProgress -= HandleFaceScanProgress;
+        try { _dualLoginCts?.Cancel(); } catch { }
+        _dualLoginCts?.Dispose();
         try { _homeSynth?.Dispose(); } catch { }
 
         base.OnFormClosed(e);
@@ -1946,12 +1852,12 @@ public class HomePage : Form, TuioListener
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  Face Recognition Integration
+    //  Dual Login (parallel face + Bluetooth race) + Enrollment
     // ══════════════════════════════════════════════════════════════
 
     private void InitializeFaceID()
     {
-        // Initialize TTS for greetings
+        // TTS for greetings
         try
         {
             _homeSynth = new SpeechSynthesizer();
@@ -1965,10 +1871,10 @@ public class HomePage : Form, TuioListener
         }
         catch { _homeSynth = null; }
 
-        // Subscribe to face recognition events
-        FaceIDRouter.OnFaceRecognized += HandleFaceRecognized;
+        // Live confidence ticker (additive listener)
+        FaceIDRouter.OnFaceScanProgress += HandleFaceScanProgress;
 
-        // Connect to the Python face recognition server
+        // Connect to Python face server
         _faceIDClient = new FaceIDClient();
         ConnectFaceIDWithRetry();
 
@@ -1980,8 +1886,13 @@ public class HomePage : Form, TuioListener
         };
         _faceReconnectTimer.Start();
 
-        // Start the 5-second face scan window
-        StartFaceScanWindow();
+        // Kick off the dual-login race
+        _dualLogin = new DualLoginManager(
+            loadUsers:           () => LoadUsersFromJson(),
+            scanBluetoothOnce:   () => GetCurrentBluetoothId(),
+            adminBluetoothMac:   ADMIN_BLUETOOTH_MAC);
+
+        StartDualLogin();
     }
 
     private void ConnectFaceIDWithRetry()
@@ -1993,45 +1904,58 @@ public class HomePage : Form, TuioListener
         });
     }
 
-    private void StartFaceScanWindow()
+    private async void StartDualLogin()
     {
+        if (this.IsDisposed) return;
+
         _faceLoginCompleted = false;
+        this.BeginInvoke((MethodInvoker)(() =>
+            ShowFaceScanHUD("Scanning...", "Look at the camera or pair your phone")));
 
-        // Show the scanning HUD
-        if (_faceScanHUD != null)
+        try { _dualLoginCts?.Cancel(); } catch { }
+        _dualLoginCts?.Dispose();
+        _dualLoginCts = new CancellationTokenSource();
+
+        DualLoginManager.LoginResult result;
+        try
         {
-            _faceScanStatusLabel.Text = "Scanning Face...";
-            _faceScanSubLabel.Text = "Stand in front of the camera";
-            _faceScanHUD.FillColor = Color.FromArgb(210, 12, 20, 40);
-            _faceScanHUD.BorderColor = Color.FromArgb(100, 80, 160, 255);
-            _faceScanHUD.Visible = true;
-            _faceScanHUD.BringToFront();
-            _faceScanHUD.Invalidate();
+            result = await _dualLogin.RunAsync(_dualLoginCts.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HomePage] DualLogin exception: {ex.Message}");
+            return;
         }
 
-        _facePulseTimer?.Start();
-        lblFooter.Text = "Scanning for player...";
+        if (this.IsDisposed) return;
 
-        // 5-second timeout → fall back to Bluetooth
-        if (_faceScanTimeoutTimer != null)
+        if (!result.Success)
         {
-            _faceScanTimeoutTimer.Stop();
-            _faceScanTimeoutTimer.Dispose();
-        }
-
-        _faceScanTimeoutTimer = new System.Windows.Forms.Timer { Interval = 5000 };
-        _faceScanTimeoutTimer.Tick += (s, e) =>
-        {
-            _faceScanTimeoutTimer.Stop();
-            if (!_faceLoginCompleted && !pageOpen)
+            this.BeginInvoke((MethodInvoker)(() =>
             {
-                // Face scan timed out — fall back to Bluetooth
-                HideFaceScanHUD();
-                lblFooter.Text = "Face not recognized — scanning Bluetooth...";
-                _bluetoothTimer.Start();
-            }
-        };
-        _faceScanTimeoutTimer.Start();
+                if (this.IsDisposed) return;
+                _faceScanStatusLabel.Text = "No login yet";
+                _faceScanSubLabel.Text = "Place marker 10 to enroll, or try again";
+                lblFooter.Text = "Place marker 10 to enroll a new player";
+            }));
+            return;
+        }
+
+        _faceLoginCompleted = true;
+        this.BeginInvoke((MethodInvoker)(() => CompleteLoginAndNavigate(result)));
+    }
+
+    private void ShowFaceScanHUD(string status, string sub)
+    {
+        if (_faceScanHUD == null) return;
+        _faceScanStatusLabel.Text = status;
+        _faceScanSubLabel.Text = sub;
+        _faceScanHUD.FillColor = Color.FromArgb(210, 12, 20, 40);
+        _faceScanHUD.BorderColor = Color.FromArgb(100, 80, 160, 255);
+        _faceScanHUD.Visible = true;
+        _faceScanHUD.BringToFront();
+        _faceScanHUD.Invalidate();
+        _facePulseTimer?.Start();
     }
 
     private void HideFaceScanHUD()
@@ -2041,84 +1965,151 @@ public class HomePage : Form, TuioListener
             _faceScanHUD.Visible = false;
     }
 
-    private void HandleFaceRecognized(string userName, float confidence)
+    private void HandleFaceScanProgress(string userName, float confidence, bool matched)
     {
-        if (_faceLoginCompleted || pageOpen || this.IsDisposed) return;
-
-        // Match against cached users by Name or FaceId
-        var user = cachedUsers.FirstOrDefault(u =>
-            string.Equals(u.Name?.Trim(), userName?.Trim(), StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(u.FaceId?.Trim(), userName?.Trim(), StringComparison.OrdinalIgnoreCase));
-
-        if (user == null) return;
-
-        _faceLoginCompleted = true;
-
+        if (this.IsDisposed || _faceLoginCompleted) return;
         try
         {
             this.BeginInvoke((MethodInvoker)(() =>
             {
-                // Stop the timeout timer on UI thread (thread-safe)
-                _faceScanTimeoutTimer?.Stop();
-                _bluetoothTimer?.Stop();
-
-                // Update HUD to success state
-                _faceScanStatusLabel.Text = $"Welcome, {user.Name}!";
-                _faceScanSubLabel.Text = $"Identity confirmed  •  {MapDisplayedLevel(user.Level)} level";
-                _faceScanHUD.FillColor = Color.FromArgb(215, 15, 55, 35);
-                _faceScanHUD.BorderColor = Color.FromArgb(140, 60, 220, 100);
-                _faceScanHUD.Invalidate();
-                _faceScanRing.Invalidate();
-
-                lblFooter.Text = "Player identified: " + user.Name;
-                lblInstruction.Text = MapDetectedPlayerLevel(user.Level);
-
-                // TTS greeting
-                try
-                {
-                    if (_homeSynth != null && !AppSettings.IsMuted)
-                    {
-                        _homeSynth.Rate = AppSettings.VoiceRate;
-                        _homeSynth.SpeakAsyncCancelAll();
-                        _homeSynth.SpeakAsync(
-                            $"Identity confirmed. Welcome, {user.Name}. " +
-                            $"Loading {MapDisplayedLevel(user.Level)} Padel training modules.");
-                    }
-                }
-                catch { }
-
-                // Navigate after a short delay so the player sees the greeting
-                var navTimer = new System.Windows.Forms.Timer { Interval = 2800 };
-                navTimer.Tick += (s2, e2) =>
-                {
-                    navTimer.Stop();
-                    navTimer.Dispose();
-                    HideFaceScanHUD();
-
-                    if (pageOpen) return;
-                    pageOpen = true;
-                    currentUser = user;
-
-                    Form page = new LearningPage(user, client);
-                    page.FormClosed += (s3, e3) =>
-                    {
-                        pageOpen = false;
-                        currentUser = null;
-                        _faceLoginCompleted = false;
-                        lblInstruction.Text = "Waiting to detect your player level automatically...";
-                        lblFooter.Text = "Scanning for player...";
-                        this.Show();
-                        // Restart face scan window (5 s), then Bluetooth fallback
-                        StartFaceScanWindow();
-                    };
-
-                    page.Show();
-                    this.Hide();
-                };
-                navTimer.Start();
+                if (_faceScanSubLabel == null || this.IsDisposed) return;
+                if (matched && !string.IsNullOrEmpty(userName))
+                    _faceScanSubLabel.Text = $"Recognising {userName} ({confidence:F2})";
+                else
+                    _faceScanSubLabel.Text = $"Scanning... ({confidence:F2})";
             }));
         }
         catch { }
+    }
+
+    private void CompleteLoginAndNavigate(DualLoginManager.LoginResult result)
+    {
+        if (pageOpen || _adminPageOpen) return;
+        var user = result.User;
+        if (user == null) return;
+
+        currentUser = user;
+
+        _faceScanStatusLabel.Text = $"Welcome, {user.Name}!";
+        _faceScanSubLabel.Text = $"{result.Source} login  •  {MapDisplayedLevel(user.Level)}";
+        _faceScanHUD.FillColor = Color.FromArgb(215, 15, 55, 35);
+        _faceScanHUD.BorderColor = Color.FromArgb(140, 60, 220, 100);
+        _faceScanHUD.Invalidate();
+        _faceScanRing?.Invalidate();
+        lblFooter.Text = "Player identified: " + user.Name;
+        lblInstruction.Text = MapDetectedPlayerLevel(user.Level);
+
+        try
+        {
+            if (_homeSynth != null && !AppSettings.IsMuted)
+            {
+                _homeSynth.Rate = AppSettings.VoiceRate;
+                _homeSynth.SpeakAsyncCancelAll();
+                _homeSynth.SpeakAsync(
+                    $"Welcome, {user.Name}. Loading {MapDisplayedLevel(user.Level)} Padel training.");
+            }
+        }
+        catch { }
+
+        var navTimer = new System.Windows.Forms.Timer { Interval = 2000 };
+        navTimer.Tick += (s, e) =>
+        {
+            navTimer.Stop();
+            navTimer.Dispose();
+            HideFaceScanHUD();
+            NavigateByRole(user);
+        };
+        navTimer.Start();
+    }
+
+    private void NavigateByRole(UserData user)
+    {
+        if (string.Equals(user.Role, "Admin", StringComparison.OrdinalIgnoreCase))
+        {
+            _adminPageOpen = true;
+            var adminPage = new AdminDashboardPage(
+                tuioClient:  client,
+                adminName:   user.Name,
+                btConnected: true,
+                gestureRef:  _gestureClient,
+                faceRef:     _faceIDClient,
+                gazeRef:     null);
+            adminPage.FormClosed += (s, e) =>
+            {
+                _adminPageOpen = false;
+                lblInstruction.Text = "Waiting to detect your player level automatically...";
+                lblFooter.Text = "Scanning for player...";
+                this.Show();
+                StartDualLogin();
+            };
+            adminPage.Show();
+            this.Hide();
+            return;
+        }
+
+        pageOpen = true;
+        var page = new LearningPage(user, client);
+        page.FormClosed += (s, e) =>
+        {
+            pageOpen = false;
+            currentUser = null;
+            _faceLoginCompleted = false;
+            lblInstruction.Text = "Waiting to detect your player level automatically...";
+            lblFooter.Text = "Scanning for player...";
+            this.Show();
+            StartDualLogin();
+        };
+        page.Show();
+        this.Hide();
+    }
+
+    private void OpenEnrollmentPage()
+    {
+        if (_enrollPageOpen || pageOpen || _adminPageOpen) return;
+        if (_faceIDClient == null || !_faceIDClient.IsConnected)
+        {
+            lblFooter.Text = "Face server not running — start face_recognition_server.py first.";
+            return;
+        }
+
+        try { _dualLoginCts?.Cancel(); } catch { }
+        _enrollPageOpen = true;
+
+        var page = new EnrollmentPage(client, _faceIDClient, onCompleted: newUser =>
+        {
+            _enrollPageOpen = false;
+            if (newUser == null)
+            {
+                // Cancelled — restart login race
+                this.Show();
+                StartDualLogin();
+                return;
+            }
+
+            // Auto-login the new user (skip dual-login wait)
+            _faceLoginCompleted = true;
+            this.Show();
+            CompleteLoginAndNavigate(new DualLoginManager.LoginResult
+            {
+                Success    = true,
+                User       = newUser,
+                Source     = DualLoginManager.LoginSource.Face,
+                Confidence = 1.0f
+            });
+        });
+
+        page.FormClosed += (s, e) =>
+        {
+            _enrollPageOpen = false;
+            if (!_faceLoginCompleted && !pageOpen && !_adminPageOpen)
+            {
+                this.Show();
+                StartDualLogin();
+            }
+        };
+
+        page.Show();
+        this.Hide();
     }
 }
 
@@ -3218,6 +3209,7 @@ public class LearningPage : Form, TuioListener
             {
                 string path = @"C:\Users\agmail\Desktop\padel proj\Padel-Learning-System-1\TUIO11_NET-master\bin\Debug\happy2.jpg";
                 if (!File.Exists(path)) path = Path.Combine(Application.StartupPath, "happy2.jpg");
+                if (!File.Exists(path)) path = Path.Combine(Application.StartupPath, "Images", "happy2.jpg");
                 if (File.Exists(path))
                 {
                     _happyBgImage = Image.FromFile(path);
@@ -4213,10 +4205,12 @@ public class LessonPage : Form, TuioListener
 
         try
         {
-            // Try Data subfolder first, then startup path directly
+            // Try Data subfolder first, then startup path directly, then Images subfolder
             string imagePath = Path.Combine(Application.StartupPath, "Data", imageName);
             if (!File.Exists(imagePath))
                 imagePath = Path.Combine(Application.StartupPath, imageName);
+            if (!File.Exists(imagePath))
+                imagePath = Path.Combine(Application.StartupPath, "Images", imageName);
             if (!File.Exists(imagePath)) return;
 
             using (FileStream fs = new FileStream(imagePath, FileMode.Open, FileAccess.Read))
@@ -4906,6 +4900,7 @@ public class LessonPage : Form, TuioListener
             {
                 string path = @"C:\Users\agmail\Desktop\padel proj\Padel-Learning-System-1\TUIO11_NET-master\bin\Debug\happy2.jpg";
                 if (!File.Exists(path)) path = Path.Combine(Application.StartupPath, "happy2.jpg");
+                if (!File.Exists(path)) path = Path.Combine(Application.StartupPath, "Images", "happy2.jpg");
                 if (File.Exists(path))
                 {
                     _happyBgImage = Image.FromFile(path);
@@ -5448,6 +5443,8 @@ public class QuizPage : Form, TuioListener
             string p = System.IO.Path.Combine(Application.StartupPath, "Data", name);
             if (!System.IO.File.Exists(p))
                 p = System.IO.Path.Combine(Application.StartupPath, name);
+            if (!System.IO.File.Exists(p))
+                p = System.IO.Path.Combine(Application.StartupPath, "Images", name);
             if (!System.IO.File.Exists(p)) return;
             using (var fs = new System.IO.FileStream(p, System.IO.FileMode.Open, System.IO.FileAccess.Read))
             using (Image img = Image.FromStream(fs))
@@ -5837,6 +5834,8 @@ public class SpellingPage : Form, TuioListener
             string p = System.IO.Path.Combine(Application.StartupPath, "Data", name);
             if (!System.IO.File.Exists(p))
                 p = System.IO.Path.Combine(Application.StartupPath, name);
+            if (!System.IO.File.Exists(p))
+                p = System.IO.Path.Combine(Application.StartupPath, "Images", name);
             if (!System.IO.File.Exists(p)) return;
             Bitmap bmp;
             using (var fs = new System.IO.FileStream(p, System.IO.FileMode.Open, System.IO.FileAccess.Read))
