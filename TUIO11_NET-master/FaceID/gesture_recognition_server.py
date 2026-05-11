@@ -81,9 +81,11 @@ except ImportError as e:
 try:
     from mediapipe.python.solutions import pose as mp_pose
 except ImportError as e:
-    print(f"[GestureServer] Missing dep: {e}")
-    print("[GestureServer] Run: pip install mediapipe")
-    print("[GestureServer] (MediaPipe officially supports Python 3.9-3.12.)")
+    print(f"[GestureServer] MediaPipe legacy 'solutions.pose' import failed: {e}")
+    print("[GestureServer] MediaPipe >= 0.10.30 removed the legacy solutions API.")
+    print("[GestureServer] Pin to a version that still exposes it. On Python 3.10/3.12:")
+    print("[GestureServer]   pip install \"mediapipe==0.10.13\" --force-reinstall")
+    print("[GestureServer] (MediaPipe officially supports Python 3.9-3.12; 3.13+ has no wheels.)")
     sys.exit(1)
 
 try:

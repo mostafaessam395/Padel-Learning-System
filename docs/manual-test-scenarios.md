@@ -21,11 +21,20 @@ Run these once before any scenario.
 | Emotion server (optional) | `python TUIO11_NET-master\mock_emotion_server.py` | 5005 |
 | Main app | `TUIO11_NET-master\bin\Debug\TuioDemo.exe` | listens on TUIO 3333 |
 
-**Gesture server first-time install:**
+**Gesture server first-time install (verified working on Python 3.12):**
 ```
-pip install dollarpy mediapipe opencv-python numpy
+pip install dollarpy "mediapipe==0.10.13" opencv-python numpy
 ```
-MediaPipe officially supports Python 3.9–3.12; use that range to avoid wheel issues on 3.13/3.14.
+**Why the version pin:** MediaPipe ≥ 0.10.30 removed the legacy `solutions.pose` API that the Skelaton trainer (and this server) use. MediaPipe is officially Python 3.9–3.12; on 3.13/3.14 there are no wheels at all.
+
+**⚠ Camera conflict — only one camera-using server can run at a time on a single webcam:**
+
+All four Python servers (`face_recognition_server`, `gaze_tracking_server`, `gesture_recognition_server`, `yolo_tracking_server`) try to open camera index `0`. On Windows only one process holds the webcam at a time, so simultaneously running them with a single camera will leave all but the first with "cannot open camera" errors.
+
+Workarounds:
+- For a demo, pick the two you need most (face + gesture is the common pair) and skip the others.
+- With two physical webcams: edit `CAMERA_INDEX = 0` to `1` in one of the server files.
+- Sharing camera between servers would need a separate frame-broker — out of scope here.
 
 **Before each scenario:**
 - Back up `Data\users.json` and `Data\gaze_reports\` (in case you want to roll back).
