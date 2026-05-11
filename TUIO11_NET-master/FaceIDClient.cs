@@ -9,14 +9,31 @@ using Newtonsoft.Json.Linq;
 /// </summary>
 public static class FaceIDRouter
 {
-    /// <summary>
-    /// Fired when a face is recognized. Parameters: userName, confidence.
-    /// </summary>
+    /// <summary>Fired when a confident face match arrives. (name, confidence 0-1)</summary>
     public static event Action<string, float> OnFaceRecognized;
+
+    /// <summary>
+    /// Fired on every face_scan event (matched or not). userName is null when unmatched.
+    /// Used by the HomePage live-confidence ticker.
+    /// </summary>
+    public static event Action<string, float, bool> OnFaceScanProgress;
+
+    /// <summary>Fired on enroll/reload/cancel replies from the Python server.</summary>
+    public static event Action<JObject> OnServerReply;
 
     public static void RouteRecognition(string userName, float confidence)
     {
         OnFaceRecognized?.Invoke(userName, confidence);
+    }
+
+    public static void RouteScanProgress(string userName, float confidence, bool matched)
+    {
+        OnFaceScanProgress?.Invoke(userName, confidence, matched);
+    }
+
+    public static void RouteServerReply(JObject json)
+    {
+        OnServerReply?.Invoke(json);
     }
 }
 
@@ -113,22 +130,73 @@ public class FaceIDClient : IDisposable
 
             string type = json["type"]?.ToString() ?? "";
 
-            if (type == "face_detected")
+            switch (type)
             {
-                string userName = json["user_name"]?.ToString();
-                float confidence = json["confidence"]?.Value<float>() ?? 0f;
-
-                // Trust the Python server's match decision (it already filters by distance threshold)
-                if (!string.IsNullOrEmpty(userName))
+                case "face_detected":
                 {
-                    Console.WriteLine($"[FaceIDClient] Face recognized: {userName} (confidence: {confidence:F2})");
-                    FaceIDRouter.RouteRecognition(userName, confidence);
+                    string userName = json["user_name"]?.ToString();
+                    float confidence = json["confidence"]?.Value<float>() ?? 0f;
+                    if (!string.IsNullOrEmpty(userName))
+                    {
+                        Console.WriteLine($"[FaceIDClient] Match: {userName} ({confidence:F2})");
+                        FaceIDRouter.RouteRecognition(userName, confidence);
+                    }
+                    break;
                 }
+                case "face_scan":
+                {
+                    string userName = (json["user_name"] == null || json["user_name"].Type == JTokenType.Null)
+                        ? null
+                        : json["user_name"].ToString();
+                    float confidence = json["confidence"]?.Value<float>() ?? 0f;
+                    bool matched = json["matched"]?.Value<bool>() ?? false;
+                    FaceIDRouter.RouteScanProgress(userName, confidence, matched);
+                    break;
+                }
+                case "enroll_done":
+                case "enroll_failed":
+                case "enroll_cancel_done":
+                case "reload_done":
+                {
+                    Console.WriteLine($"[FaceIDClient] Reply: {type} {json}");
+                    FaceIDRouter.RouteServerReply(json);
+                    break;
+                }
+                default:
+                    Console.WriteLine($"[FaceIDClient] Unhandled type='{type}' raw={data}");
+                    break;
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[FaceIDClient] Parse error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Sends a single newline-terminated JSON command to the face server.
+    /// Returns true on apparent success, false otherwise. Non-blocking.
+    /// </summary>
+    public bool SendCommand(JObject command)
+    {
+        if (command == null) return false;
+        var stream = _stream;
+        var client = _client;
+        if (stream == null || client == null || !client.Connected) return false;
+
+        try
+        {
+            string line = command.ToString(Newtonsoft.Json.Formatting.None) + "\n";
+            byte[] bytes = Encoding.UTF8.GetBytes(line);
+            stream.Write(bytes, 0, bytes.Length);
+            stream.Flush();
+            Console.WriteLine($"[FaceIDClient] -> {line.TrimEnd()}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[FaceIDClient] SendCommand error: {ex.Message}");
+            return false;
         }
     }
 

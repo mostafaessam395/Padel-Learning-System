@@ -133,6 +133,8 @@ public static class AdaptiveUIHelper
         string imgPath = @"C:\Users\agmail\Desktop\padel proj\Padel-Learning-System-1\TUIO11_NET-master\bin\Debug\happy2.jpg";
         if (!File.Exists(imgPath))
             imgPath = Path.Combine(Application.StartupPath, "happy2.jpg");
+        if (!File.Exists(imgPath))
+            imgPath = Path.Combine(Application.StartupPath, "Images", "happy2.jpg");
 
         Console.WriteLine($"[AdaptiveUI] Image: {imgPath} | Exists={File.Exists(imgPath)}");
 
