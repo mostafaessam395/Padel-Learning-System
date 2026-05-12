@@ -1787,6 +1787,7 @@ public class HomePage : Form, TuioListener
         _facePulseTimer?.Dispose();
         _faceIDClient?.Disconnect();
         FaceIDRouter.OnFaceScanProgress -= HandleFaceScanProgress;
+        FaceIDRouter.OnFaceRecognized -= HandlePermanentFaceLogin;
         try { _dualLoginCts?.Cancel(); } catch { }
         _dualLoginCts?.Dispose();
         try { _homeSynth?.Dispose(); } catch { }
@@ -1901,6 +1902,12 @@ public class HomePage : Form, TuioListener
         // Live confidence ticker (additive listener)
         FaceIDRouter.OnFaceScanProgress += HandleFaceScanProgress;
 
+        // Permanent face-login listener — bypasses DualLoginManager's race
+        // lifecycle. If a confident match for a known user arrives at ANY
+        // time while we're on HomePage and not logged in, navigate them in.
+        // This is the robust fallback for slow auto-enrol / timing edge cases.
+        FaceIDRouter.OnFaceRecognized += HandlePermanentFaceLogin;
+
         // Connect to Python face server
         _faceIDClient = new FaceIDClient();
         ConnectFaceIDWithRetry();
@@ -1961,10 +1968,34 @@ public class HomePage : Form, TuioListener
             this.BeginInvoke((MethodInvoker)(() =>
             {
                 if (this.IsDisposed) return;
-                _faceScanStatusLabel.Text = "No login yet";
-                _faceScanSubLabel.Text = "Place marker 10 to enroll, or try again";
-                lblFooter.Text = "Place marker 10 to enroll a new player";
+                _faceScanStatusLabel.Text = "Looking for a face...";
+                _faceScanSubLabel.Text = "Sit in front of the camera — auto-enrol kicks in after a few seconds";
+                lblFooter.Text = "Auto-enrol active — or place marker 10 to enrol manually";
             }));
+
+            // Auto-retry the dual-login race so that slow auto-enrol still wins.
+            // The face server keeps broadcasting face_detected events at its own
+            // pace, but DualLoginManager only subscribes to OnFaceRecognized while
+            // a race is active. Restart the race every couple of seconds while
+            // HomePage is the visible page and no one is logged in.
+            if (!this.IsDisposed && !pageOpen && !_adminPageOpen && !_enrollPageOpen && !_faceLoginCompleted)
+            {
+                this.BeginInvoke((MethodInvoker)(() =>
+                {
+                    var retryTimer = new System.Windows.Forms.Timer { Interval = 2000 };
+                    retryTimer.Tick += (s, e) =>
+                    {
+                        retryTimer.Stop();
+                        retryTimer.Dispose();
+                        if (!this.IsDisposed && !pageOpen && !_adminPageOpen
+                            && !_enrollPageOpen && !_faceLoginCompleted)
+                        {
+                            StartDualLogin();
+                        }
+                    };
+                    retryTimer.Start();
+                }));
+            }
             return;
         }
 
@@ -1990,6 +2021,58 @@ public class HomePage : Form, TuioListener
         _facePulseTimer?.Stop();
         if (_faceScanHUD != null)
             _faceScanHUD.Visible = false;
+    }
+
+    /// <summary>
+    /// Long-lived face-login fallback. Subscribed once in InitializeFaceID and
+    /// active for the whole HomePage lifecycle. Whenever a confident face match
+    /// for a known user arrives, navigate immediately — even if the dual-login
+    /// race already gave up.
+    /// </summary>
+    private void HandlePermanentFaceLogin(string name, float confidence)
+    {
+        if (this.IsDisposed || _faceLoginCompleted) return;
+        if (pageOpen || _adminPageOpen || _enrollPageOpen) return;
+        if (string.IsNullOrEmpty(name)) return;
+        if (confidence < DualLoginManager.FACE_CONFIDENCE_THRESHOLD) return;
+
+        UserData user = null;
+        try
+        {
+            var users = LoadUsersFromJson();
+            user = users.FirstOrDefault(u =>
+                u.IsActive && (
+                    string.Equals(u.Name?.Trim(),   name.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(u.FaceId?.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(u.UserId?.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase)));
+        }
+        catch (Exception ex) { Console.WriteLine($"[HomePage] PermanentFaceLogin lookup error: {ex.Message}"); return; }
+
+        if (user == null)
+        {
+            Console.WriteLine($"[HomePage] PermanentFaceLogin: '{name}' not in users.json — ignoring");
+            return;
+        }
+
+        _faceLoginCompleted = true;
+        try { _dualLoginCts?.Cancel(); } catch { }
+
+        Console.WriteLine($"[HomePage] PermanentFaceLogin SUCCESS: {user.Name} ({user.UserId}) conf={confidence:F2}");
+        try
+        {
+            this.BeginInvoke((MethodInvoker)(() =>
+            {
+                if (this.IsDisposed) return;
+                CompleteLoginAndNavigate(new DualLoginManager.LoginResult
+                {
+                    Success    = true,
+                    User       = user,
+                    Source     = DualLoginManager.LoginSource.Face,
+                    Confidence = confidence,
+                });
+            }));
+        }
+        catch { }
     }
 
     private void HandleFaceScanProgress(string userName, float confidence, bool matched)

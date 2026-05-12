@@ -23,7 +23,7 @@ public class DualLoginManager
     }
 
     /// <summary>Confidence floor for trusting a face match.</summary>
-    public const float FACE_CONFIDENCE_THRESHOLD = 0.75f;
+    public const float FACE_CONFIDENCE_THRESHOLD = 0.60f;
 
     /// <summary>How long the face task waits for a confident match before giving up.</summary>
     public TimeSpan FaceTimeout { get; set; } = TimeSpan.FromSeconds(8);
