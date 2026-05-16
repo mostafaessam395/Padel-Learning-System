@@ -9,7 +9,7 @@ using TuioDemo;
 
 /// <summary>
 /// Admin Management — two tabs: Training Content + Users Management.
-/// Users tab is the primary focus: full grid + inline edit form.
+/// Users tab: fully TUIO-marker driven editing (no mouse/keyboard required).
 /// </summary>
 public class ContentManagerPage : Form, TuioListener
 {
@@ -19,25 +19,66 @@ public class ContentManagerPage : Form, TuioListener
     private readonly UserService    _userSvc    = new UserService();
 
     // ── users tab state ───────────────────────────────────────────────────
-    private DataGridView  _uGrid;
+    private DataGridView   _uGrid;
     private List<UserData> _uItems = new List<UserData>();
-    // form fields
-    private TextBox       _uId, _uName, _uBt, _uFace;
-    private NumericUpDown _uAge;
-    private ComboBox      _uGender, _uLevel, _uRole;
-    private CheckBox      _uActive;
-    // buttons
-    private Button _uBtnAdd, _uBtnSave, _uBtnDel, _uBtnDeact, _uBtnClr;
 
-    // ── TUIO marker state ─────────────────────────────────────────────────
-    // Marker 36 rotation → user selection
-    private float  _marker36LastAngle  = float.NaN;   // last processed angle (radians)
-    private DateTime _marker36LastMove = DateTime.MinValue; // debounce timestamp
-    // Action marker debounce (31-35, 20)
-    private int    _lastActionMarker   = -1;
-    private DateTime _lastActionTime   = DateTime.MinValue;
-    private const int ACTION_COOLDOWN_MS = 800;   // ms between same-marker actions
-    private const float ROTATION_THRESHOLD = 0.45f; // ~26 degrees in radians
+    // Read-only display labels (no textbox/combobox input for users)
+    private Label _uId, _uName, _uAge, _uGender, _uLevel, _uBt, _uFace, _uRole, _uActive;
+
+    // TUIO editing state
+    private int    _selectedFieldIdx  = 0;   // which field is selected (Marker 38)
+    private bool   _textEditMode      = false; // true when editing a text field char-by-char
+    private string _textEditBuffer    = "";    // current text being built
+    private int    _charWheelIdx      = 0;    // index into char wheel (Marker 39)
+
+    // Field names in order
+    private static readonly string[] FIELD_NAMES = {
+        "User ID", "Name", "Age", "Gender", "Level",
+        "Bluetooth ID", "Face ID", "Role", "Active" };
+
+    // Dropdown options per field index
+    private static readonly string[][] FIELD_OPTIONS = {
+        null,                                                                    // 0 User ID  (text)
+        null,                                                                    // 1 Name     (text)
+        null,                                                                    // 2 Age      (numeric)
+        new[]{"Male","Female","Other"},                                          // 3 Gender
+        new[]{"Beginner","Intermediate","Advanced","Primary","HighSchool"},      // 4 Level
+        null,                                                                    // 5 BT ID    (text)
+        null,                                                                    // 6 Face ID  (text)
+        new[]{"Player","Admin"},                                                 // 7 Role
+        new[]{"true","false"},                                                   // 8 Active
+    };
+
+    // Current dropdown index per field (for fields with options)
+    private int[] _fieldOptionIdx = new int[9];
+
+    // Character wheel for text fields
+    private static readonly char[] CHAR_WHEEL =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _:-".ToCharArray();
+
+    // Status / HUD labels
+    private Label _hudUser, _hudField, _hudValue, _hudMode, _hudChars, _hudInstructions;
+    private Panel _hudPanel;
+    // Editor card controls (rebuilt each UpdateHud call)
+    private Label _edCurrentText;   // big box showing text being built
+    private Label _edSelectedChar;  // big box showing selected character
+    private Panel _edCharRow;       // row of character tiles
+    private Label _edModeLabel;     // "Text Editing" / "Value Select"
+    private Label _edValueLabel;    // for non-text fields: current / new value
+    private Panel _editorCard;      // the whole right card
+
+    // Marker rotation state
+    private float    _m36Angle   = float.NaN;
+    private float    _m38Angle   = float.NaN;
+    private float    _m39Angle   = float.NaN;
+    private DateTime _m36Time    = DateTime.MinValue;
+    private DateTime _m38Time    = DateTime.MinValue;
+    private DateTime _m39Time    = DateTime.MinValue;
+    private int      _lastAction = -1;
+    private DateTime _lastActTime= DateTime.MinValue;
+
+    private const int   ACTION_CD_MS  = 600;
+    private const float ROT_THRESHOLD = 0.30f;  // ~17 degrees
 
     // ── content tab state ─────────────────────────────────────────────────
     private DataGridView  _cGrid;
@@ -48,17 +89,22 @@ public class ContentManagerPage : Form, TuioListener
     private Button   _cBtnAdd, _cBtnSave, _cBtnDeact, _cBtnDel, _cBtnClr;
 
     // ── colours ───────────────────────────────────────────────────────────
-    static readonly Color BG        = Color.FromArgb(18, 24, 42);
-    static readonly Color PANEL     = Color.FromArgb(24, 32, 56);
-    static readonly Color PANEL2    = Color.FromArgb(28, 38, 64);
-    static readonly Color HEADER    = Color.FromArgb(10, 14, 30);
-    static readonly Color ACCENT    = Color.FromArgb(50, 115, 255);
-    static readonly Color ACCENT2   = Color.FromArgb(30, 160, 100);
-    static readonly Color TXT       = Color.FromArgb(215, 225, 245);
-    static readonly Color TXT_DIM   = Color.FromArgb(130, 150, 195);
-    static readonly Color FIELD_BG  = Color.FromArgb(32, 42, 72);
-    static readonly Color ROW_ALT   = Color.FromArgb(22, 30, 52);
-    static readonly Color SEL_BG    = Color.FromArgb(50, 110, 220);
+    static readonly Color BG       = Color.FromArgb(18, 24, 42);
+    static readonly Color PANEL    = Color.FromArgb(24, 32, 56);
+    static readonly Color PANEL2   = Color.FromArgb(28, 38, 64);
+    static readonly Color HEADER   = Color.FromArgb(10, 14, 30);
+    static readonly Color ACCENT   = Color.FromArgb(50, 115, 255);
+    static readonly Color ACCENT2  = Color.FromArgb(30, 160, 100);
+    static readonly Color TXT      = Color.FromArgb(215, 225, 245);
+    static readonly Color TXT_DIM  = Color.FromArgb(130, 150, 195);
+    static readonly Color FIELD_BG = Color.FromArgb(32, 42, 72);
+    static readonly Color ROW_ALT  = Color.FromArgb(22, 30, 52);
+    static readonly Color SEL_BG   = Color.FromArgb(50, 110, 220);
+    static readonly Color EDIT_HL  = Color.FromArgb(255, 200, 50);
+    static readonly Color EDIT_ACT = Color.FromArgb(50, 220, 120);
+
+    // ── unused field kept to avoid CS0414 ────────────────────────────────
+    private Color _uBtnClr = Color.FromArgb(60, 68, 100);
 
     public ContentManagerPage(TuioClient tc = null)
     {
@@ -78,6 +124,7 @@ public class ContentManagerPage : Form, TuioListener
             try
             {
                 if (_tc != null) _tc.addTuioListener(this);
+                GestureRouter.ClaimFocus(this);
                 GestureRouter.OnGestureMarker += OnGesture;
                 ReloadUsers();
                 ReloadContent();
@@ -87,6 +134,7 @@ public class ContentManagerPage : Form, TuioListener
         FormClosed += (s, e) =>
         {
             GestureRouter.OnGestureMarker -= OnGesture;
+            GestureRouter.ReleaseFocus(this);
             if (_tc != null) _tc.removeTuioListener(this);
         };
     }
@@ -96,18 +144,15 @@ public class ContentManagerPage : Form, TuioListener
     // ═════════════════════════════════════════════════════════════════════
     private void Build()
     {
-        // ── header ────────────────────────────────────────────────────────
         var hdr = new Panel { Dock = DockStyle.Top, Height = 52, BackColor = HEADER };
-        var hLbl = new Label {
+        hdr.Controls.Add(new Label {
             Text = "Admin Management Panel",
             Font = new Font("Segoe UI", 15, FontStyle.Bold),
             ForeColor = Color.White, AutoSize = false,
             Size = new Size(480, 36), Location = new Point(18, 8),
-            BackColor = Color.Transparent };
-        hdr.Controls.Add(hLbl);
+            BackColor = Color.Transparent });
         Controls.Add(hdr);
 
-        // ── tab control ───────────────────────────────────────────────────
         var tabs = new TabControl {
             Dock = DockStyle.Fill,
             Font = new Font("Segoe UI", 10, FontStyle.Bold),
@@ -120,7 +165,7 @@ public class ContentManagerPage : Form, TuioListener
         var tContent = new TabPage("  Training Content  ")
             { BackColor = PANEL, UseVisualStyleBackColor = false };
 
-        tabs.TabPages.Add(tUsers);    // Users is first / default
+        tabs.TabPages.Add(tUsers);
         tabs.TabPages.Add(tContent);
 
         BuildUsersTab(tUsers);
@@ -128,325 +173,354 @@ public class ContentManagerPage : Form, TuioListener
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    //  USERS TAB  — grid takes ~60 % height, form takes ~40 %
+    //  USERS TAB  — grid (top) + TUIO editor panel (bottom)
     // ═════════════════════════════════════════════════════════════════════
     private void BuildUsersTab(TabPage tab)
     {
-        // Outer layout: title+filter row | TUIO hint row | grid | form
         var outer = new TableLayoutPanel {
             Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1,
             BackColor = PANEL };
         outer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));   // row 0: title + filters
-        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));   // row 1: grid
-        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 250));  // row 2: form
+        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));   // title bar
+        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));   // grid
+        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 340));  // TUIO editor
         tab.Controls.Add(outer);
 
-        // ── row 0: title only ─────────────────────────────────────────────
-        var filterBar = new Panel { Dock = DockStyle.Fill, BackColor = HEADER,
-            Padding = new Padding(10, 10, 10, 8) };
-        outer.Controls.Add(filterBar, 0, 0);
-
-        filterBar.Controls.Add(new Label {
-            Text = "Users Management",
+        // ── title bar ─────────────────────────────────────────────────────
+        var titleBar = new Panel { Dock = DockStyle.Fill, BackColor = HEADER,
+            Padding = new Padding(16, 10, 12, 8) };
+        titleBar.Controls.Add(new Label {
+            Text = "Users Management  —  TUIO Marker Control",
             Font = new Font("Segoe UI", 11, FontStyle.Bold),
             ForeColor = ACCENT2, AutoSize = true, BackColor = Color.Transparent,
-            Location = new Point(10, 14) });
+            Location = new Point(16, 10) });
+        outer.Controls.Add(titleBar, 0, 0);
 
-        // ── row 1: users grid ─────────────────────────────────────────────
+        // ── grid ──────────────────────────────────────────────────────────
         var gridWrap = new Panel { Dock = DockStyle.Fill,
             BackColor = PANEL, Padding = new Padding(12, 8, 12, 4) };
         outer.Controls.Add(gridWrap, 0, 1);
-
         _uGrid = MkGrid();
         _uGrid.Dock = DockStyle.Fill;
         _uGrid.SelectionChanged += OnURowSelected;
         gridWrap.Controls.Add(_uGrid);
 
-        // ── row 2: edit form ──────────────────────────────────────────────
-        outer.RowStyles[2] = new RowStyle(SizeType.Absolute, 250);
-        outer.RowStyles[1] = new RowStyle(SizeType.Percent, 100);
-
-        var formWrap = new Panel { Dock = DockStyle.Fill,
-            BackColor = PANEL2, Padding = new Padding(8, 4, 8, 4) };
-        outer.Controls.Add(formWrap, 0, 2);
-
-        // ── Fields ────────────────────────────────────────────────────────
-        _uId     = MkTxt(0); _uName = MkTxt(0);
-        _uAge    = new NumericUpDown { Minimum = 1, Maximum = 120, Value = 18,
-            Font = new Font("Segoe UI", 9) };
-        _uGender = MkCbo(new[] { "Male", "Female", "Other" }, 0);
-        _uLevel  = MkCbo(new[] { "Beginner", "Intermediate", "Advanced",
-            "Primary", "HighSchool" }, 0);
-        _uBt     = MkTxt(0); _uFace = MkTxt(0);
-        _uRole   = MkCbo(new[] { "Player", "Admin" }, 0);
-        _uActive = new CheckBox { Text = "Active", Checked = true,
-            Font = new Font("Segoe UI", 9), ForeColor = TXT,
-            AutoSize = false, BackColor = Color.Transparent };
-
-        // ── Buttons removed — TUIO marker actions only ────────────────────
-        // Fields still referenced by DispatchMarker; no click handlers needed.
-        _uBtnAdd = _uBtnSave = _uBtnDeact = _uBtnDel = _uBtnClr = null;
-
-        // ── Build a single TableLayoutPanel: 7 rows × 3 cols ─────────────
-        // row 0 = title (spans 3 cols)
-        // row 1 = labels:  User ID | Name | Age
-        // row 2 = inputs:  _uId    | _uName | _uAge
-        // row 3 = labels:  Gender  | Level  | Role
-        // row 4 = inputs:  _uGender| _uLevel| _uRole
-        // row 5 = labels:  BT ID   | Face ID| Active
-        // row 6 = inputs:  _uBt    | _uFace | _uActive
-        // row 7 = buttons (spans 3 cols)
-        var tbl = new TableLayoutPanel {
-            Dock = DockStyle.Fill,
-            ColumnCount = 3, RowCount = 8,
-            BackColor = Color.Transparent,
-            Padding = new Padding(0) };
-
-        tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
-        tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
-        tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
-
-        tbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));  // 0 title
-        tbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));  // 1 labels row 1
-        tbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));  // 2 inputs row 1
-        tbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));  // 3 labels row 2
-        tbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));  // 4 inputs row 2
-        tbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));  // 5 labels row 3
-        tbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));  // 6 inputs row 3
-        tbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));  // 7 buttons
-
-        // Helper: label cell
-        Label L(string t) => new Label {
-            Text = t, Dock = DockStyle.Fill,
-            Font = new Font("Segoe UI", 8, FontStyle.Bold),
-            ForeColor = Color.FromArgb(160, 185, 230),
-            BackColor = Color.Transparent,
-            TextAlign = ContentAlignment.BottomLeft,
-            Margin = new Padding(4, 0, 4, 1) };
-
-        // Helper: style and place an input
-        void I(Control c, int col, int row) {
-            c.Dock = DockStyle.Fill;
-            c.Margin = new Padding(4, 2, 4, 2);
-            if (c is TextBox tb) {
-                tb.BackColor = FIELD_BG; tb.ForeColor = TXT;
-                tb.BorderStyle = BorderStyle.FixedSingle;
-                tb.Font = new Font("Segoe UI", 9);
-            }
-            if (c is NumericUpDown nud) nud.Font = new Font("Segoe UI", 9);
-            if (c is ComboBox cb)       cb.Font  = new Font("Segoe UI", 9);
-            if (c is CheckBox chk) { chk.ForeColor = TXT; chk.Font = new Font("Segoe UI", 9); }
-            tbl.Controls.Add(c, col, row);
-        }
-
-        // Row 0: title spanning all 3 columns
-        var titleLbl = new Label {
-            Text = "Add / Edit User", Dock = DockStyle.Fill,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            ForeColor = ACCENT2, BackColor = Color.Transparent,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Margin = new Padding(4, 0, 0, 0) };
-        tbl.Controls.Add(titleLbl, 0, 0);
-        tbl.SetColumnSpan(titleLbl, 3);
-
-        // Row 1: labels
-        tbl.Controls.Add(L("User ID"),       0, 1);
-        tbl.Controls.Add(L("Name"),          1, 1);
-        tbl.Controls.Add(L("Age"),           2, 1);
-        // Row 2: inputs
-        I(_uId,    0, 2); I(_uName, 1, 2); I(_uAge, 2, 2);
-
-        // Row 3: labels
-        tbl.Controls.Add(L("Gender"),        0, 3);
-        tbl.Controls.Add(L("Level"),         1, 3);
-        tbl.Controls.Add(L("Role"),          2, 3);
-        // Row 4: inputs
-        I(_uGender, 0, 4); I(_uLevel, 1, 4); I(_uRole, 2, 4);
-
-        // Row 5: labels
-        tbl.Controls.Add(L("Bluetooth ID"),  0, 5);
-        tbl.Controls.Add(L("Face ID"),       1, 5);
-        tbl.Controls.Add(L("Active"),        2, 5);
-        // Row 6: inputs
-        I(_uBt, 0, 6); I(_uFace, 1, 6); I(_uActive, 2, 6);
-
-        // Row 7: marker instruction cards (spans 3 cols) — no buttons
-        var markerFlow = new FlowLayoutPanel {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false, BackColor = Color.Transparent,
-            Margin = new Padding(2, 4, 0, 0) };
-
-        var markerDefs = new (string Id, string Action, Color Clr)[] {
-            ("31", "Add",        Color.FromArgb(26, 130, 60)),
-            ("32", "Save",       ACCENT),
-            ("33", "Deactivate", Color.FromArgb(170, 100, 14)),
-            ("34", "Delete",     Color.FromArgb(175, 35, 35)),
-            ("35", "Clear",      Color.FromArgb(60, 68, 100)),
-            ("36", "↻ Select",   Color.FromArgb(80, 140, 220)),
-            ("37", "Gaze Hist.", Color.FromArgb(0, 190, 160)),
-            ("20", "Back",       Color.FromArgb(100, 60, 100)),
-        };
-        foreach (var (mid, action, clr) in markerDefs)
-        {
-            var card = new Panel {
-                Size = new Size(82, 34), BackColor = Color.FromArgb(22, 32, 58),
-                Margin = new Padding(0, 0, 5, 0), Cursor = Cursors.Default };
-            card.Paint += (s, e) => {
-                var g = e.Graphics;
-                using (var pen = new System.Drawing.Pen(clr, 1.2f))
-                    g.DrawRectangle(pen, 0, 0, card.Width - 1, card.Height - 1);
-                using (var b = new System.Drawing.SolidBrush(clr))
-                    g.FillRectangle(b, 0, 0, card.Width, 4);
-            };
-            card.Controls.Add(new Label {
-                Text = $"M{mid}", Font = new Font("Segoe UI", 8, FontStyle.Bold),
-                ForeColor = clr, BackColor = Color.Transparent,
-                Location = new Point(4, 5), AutoSize = true });
-            card.Controls.Add(new Label {
-                Text = action, Font = new Font("Segoe UI", 8),
-                ForeColor = TXT, BackColor = Color.Transparent,
-                Location = new Point(4, 18), AutoSize = true });
-            markerFlow.Controls.Add(card);
-        }
-        tbl.Controls.Add(markerFlow, 0, 7);
-        tbl.SetColumnSpan(markerFlow, 3);
-
-        formWrap.Controls.Add(tbl);
+        // ── TUIO editor panel ─────────────────────────────────────────────
+        var editorPanel = new Panel { Dock = DockStyle.Fill,
+            BackColor = Color.FromArgb(20, 28, 50),
+            Padding = new Padding(14, 10, 14, 10) };
+        outer.Controls.Add(editorPanel, 0, 2);
+        BuildTuioEditorPanel(editorPanel);
     }
 
-    // ═════════════════════════════════════════════════════════════════════
-    //  CONTENT TAB
-    // ═════════════════════════════════════════════════════════════════════
-    private void BuildContentTab(TabPage tab)
+    private void BuildTuioEditorPanel(Panel parent)
     {
-        var outer = new TableLayoutPanel {
-            Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1,
-            BackColor = PANEL };
-        outer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
-        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
-        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
-        tab.Controls.Add(outer);
+        // Split: left (60%) = field display + marker cards, right (40%) = HUD
+        var split = new TableLayoutPanel {
+            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1,
+            BackColor = Color.Transparent, CellBorderStyle = TableLayoutPanelCellBorderStyle.None };
+        split.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
+        split.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+        split.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        parent.Controls.Add(split);
 
-        // Filter bar
-        var filterBar = new Panel { Dock = DockStyle.Fill, BackColor = HEADER,
-            Padding = new Padding(10, 7, 10, 7) };
-        outer.Controls.Add(filterBar, 0, 0);
+        // ── LEFT: field display + marker cards ───────────────────────────
+        var leftPanel = new Panel { Dock = DockStyle.Fill,
+            BackColor = Color.Transparent, Padding = new Padding(0, 0, 12, 0) };
+        split.Controls.Add(leftPanel, 0, 0);
 
-        var fSearch = MkTxt(160); fSearch.ForeColor = TXT_DIM; fSearch.Text = "Search...";
-        fSearch.GotFocus  += (s, e) => { if (fSearch.Text == "Search...") { fSearch.Text = ""; fSearch.ForeColor = TXT; } };
-        fSearch.LostFocus += (s, e) => { if (fSearch.Text == "") { fSearch.Text = "Search..."; fSearch.ForeColor = TXT_DIM; } };
-        var fLevel  = MkCbo(new[] { "All Levels","Beginner","Intermediate","Advanced" }, 130);
-        var fModule = MkCbo(new[] { "All Modules","Padel Shots","Padel Rules","Practice",
-            "Quick Challenge","Speed Mode","Competition","AI Vision Coach" }, 155);
-        var fActive = new CheckBox { Text = "Active only", Checked = true,
-            Font = new Font("Segoe UI", 9), ForeColor = TXT,
-            AutoSize = true, BackColor = Color.Transparent, Margin = new Padding(4, 7, 8, 0) };
-        var bRef = MkBtn("Refresh", ACCENT, 80, 28);
-        bRef.Click += (s, e) => ReloadContent(
-            fSearch.Text == "Search..." ? "" : fSearch.Text,
-            fLevel.SelectedItem?.ToString(), fModule.SelectedItem?.ToString(), fActive.Checked);
+        // Section title
+        var fieldTitle = new Label {
+            Text = "User Data  —  edit using markers below",
+            Dock = DockStyle.Top, Height = 26,
+            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            ForeColor = ACCENT2, BackColor = Color.Transparent,
+            Padding = new Padding(2, 4, 0, 0) };
+        leftPanel.Controls.Add(fieldTitle);
 
-        var ff = new FlowLayoutPanel { Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight, WrapContents = false,
-            BackColor = Color.Transparent };
-        void AF(Control c, int g = 8) { c.Margin = new Padding(0, 0, g, 0); ff.Controls.Add(c); }
-        AF(new Label { Text = "Training Content", Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            ForeColor = ACCENT, AutoSize = true, BackColor = Color.Transparent,
-            Margin = new Padding(0, 5, 20, 0) });
-        AF(fSearch); AF(fLevel); AF(fModule); ff.Controls.Add(fActive); AF(bRef, 0);
-        filterBar.Controls.Add(ff);
+        // Separator line under title
+        var sep1 = new Panel { Dock = DockStyle.Top, Height = 2,
+            BackColor = Color.FromArgb(40, 60, 100), Margin = new Padding(0, 2, 0, 6) };
+        leftPanel.Controls.Add(sep1);
 
-        // Grid
-        var gridWrap = new Panel { Dock = DockStyle.Fill, BackColor = PANEL,
-            Padding = new Padding(12, 8, 12, 4) };
-        outer.Controls.Add(gridWrap, 0, 1);
-        _cGrid = MkGrid();
-        _cGrid.Dock = DockStyle.Fill;
-        _cGrid.SelectionChanged += OnCRowSelected;
-        gridWrap.Controls.Add(_cGrid);
+        // Field grid: 3 columns of (label + value), 3 rows for 9 fields
+        var fieldGrid = new TableLayoutPanel {
+            Dock = DockStyle.Top, Height = 138,
+            ColumnCount = 6, RowCount = 3,
+            BackColor = Color.Transparent,
+            Padding = new Padding(0, 4, 0, 4),
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.None };
+        // 3 pairs: label col (fixed) + value col (percent)
+        fieldGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82));
+        fieldGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,  33.3f));
+        fieldGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82));
+        fieldGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,  33.3f));
+        fieldGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82));
+        fieldGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,  33.3f));
+        // 3 rows, each 42px tall for breathing room
+        fieldGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        fieldGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        fieldGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        leftPanel.Controls.Add(fieldGrid);
 
-        // Form
-        var formWrap = new Panel { Dock = DockStyle.Fill, BackColor = PANEL2,
-            Padding = new Padding(12, 8, 12, 8), AutoScroll = true };
-        outer.Controls.Add(formWrap, 0, 2);
+        // Create display labels
+        _uId     = MkFieldLabel(); _uName   = MkFieldLabel();
+        _uAge    = MkFieldLabel(); _uGender = MkFieldLabel();
+        _uLevel  = MkFieldLabel(); _uBt     = MkFieldLabel();
+        _uFace   = MkFieldLabel(); _uRole   = MkFieldLabel();
+        _uActive = MkFieldLabel();
 
-        formWrap.Controls.Add(new Label {
-            Text = "Add / Edit Training Content", Dock = DockStyle.Top, Height = 26,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold),
-            ForeColor = ACCENT, BackColor = Color.Transparent });
+        var fieldDefs = new (string Lbl, Label Ctrl)[] {
+            ("User ID",     _uId),   ("Name",        _uName),   ("Age",    _uAge),
+            ("Gender",      _uGender),("Level",       _uLevel),  ("BT ID",  _uBt),
+            ("Face ID",     _uFace), ("Role",         _uRole),   ("Active", _uActive)
+        };
 
-        _cId = MkTxt(0); _cTitle = MkTxt(0);
-        _cLevel  = MkCbo(new[] { "Beginner","Intermediate","Advanced" }, 0);
-        _cMarker = MkCbo(new[] { "3","4","5","6","7","8" }, 0);
-        _cModule = MkCbo(new[] { "Padel Shots","Padel Rules","Practice",
-            "Quick Challenge","Speed Mode","Competition","AI Vision Coach" }, 0);
-        _cActivity = new ComboBox { DropDownStyle = ComboBoxStyle.DropDown,
-            Font = new Font("Segoe UI", 9), Dock = DockStyle.Fill };
-        _cActivity.Items.AddRange(new object[] { "Shot Training","Rules Training",
-            "Court Positioning","Net Control","Smash Position","Forehand Position",
-            "Backhand Position","Volley","Wall Practice","Serve Practice",
-            "Reaction Training","Competition Movement" });
-        _cDesc = MkTxt(0, true); _cTip = MkTxt(0, true);
-        _cZone = MkTxt(0);
-        _cDiff = MkCbo(new[] { "Beginner","Intermediate","Advanced" }, 0);
-        _cActive = new CheckBox { Text = "Active", Checked = true,
-            Font = new Font("Segoe UI", 9), ForeColor = TXT,
-            AutoSize = true, BackColor = Color.Transparent };
-
-        var cGrid = new TableLayoutPanel {
-            Dock = DockStyle.Fill, ColumnCount = 6, RowCount = 4,
-            BackColor = Color.Transparent, Padding = new Padding(0, 4, 0, 4) };
-        for (int i = 0; i < 6; i++)
-            cGrid.ColumnStyles.Add(new ColumnStyle(
-                i % 2 == 0 ? SizeType.Absolute : SizeType.Percent,
-                i % 2 == 0 ? 90 : 33.3f));
-        cGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        cGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        cGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
-        cGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-
-        void ACF(string lbl, Control ctrl, int col, int row, bool span = false) {
-            cGrid.Controls.Add(new Label {
-                Text = lbl, Font = new Font("Segoe UI", 9, FontStyle.Bold),
-                ForeColor = TXT_DIM, Dock = DockStyle.Fill,
+        int col = 0, row = 0;
+        foreach (var (lbl, ctrl) in fieldDefs) {
+            fieldGrid.Controls.Add(new Label {
+                Text = lbl, Dock = DockStyle.Fill,
+                Font = new Font("Segoe UI", 8, FontStyle.Bold),
+                ForeColor = TXT_DIM, BackColor = Color.Transparent,
                 TextAlign = ContentAlignment.MiddleRight,
-                Margin = new Padding(0, 0, 6, 0), BackColor = Color.Transparent }, col, row);
-            ctrl.Dock = DockStyle.Fill; ctrl.Margin = new Padding(0, 3, 12, 3);
-            if (ctrl is TextBox tb) { tb.BackColor = FIELD_BG; tb.ForeColor = TXT; tb.BorderStyle = BorderStyle.FixedSingle; }
-            cGrid.Controls.Add(ctrl, col + 1, row);
-            if (span) cGrid.SetColumnSpan(ctrl, 5);
+                Margin = new Padding(4, 4, 8, 4) }, col, row);
+            fieldGrid.Controls.Add(ctrl, col + 1, row);
+            col += 2;
+            if (col >= 6) { col = 0; row++; }
         }
 
-        ACF("ID",       _cId,       0, 0); ACF("Title",    _cTitle,    2, 0); ACF("Level",  _cLevel,  4, 0);
-        ACF("Marker",   _cMarker,   0, 1); ACF("Module",   _cModule,   2, 1); ACF("Activity",_cActivity,4,1);
-        ACF("Desc",     _cDesc,     0, 2, false); ACF("Coach Tip", _cTip, 2, 2, false);
-        ACF("Zone",     _cZone,     4, 2); 
-        ACF("Difficulty",_cDiff,    0, 3);
-        _cActive.Margin = new Padding(4, 8, 0, 0);
-        cGrid.Controls.Add(_cActive, 3, 3);
-        formWrap.Controls.Add(cGrid);
+        // Separator before marker cards
+        var sep2 = new Panel { Dock = DockStyle.Top, Height = 2,
+            BackColor = Color.FromArgb(40, 60, 100), Margin = new Padding(0, 4, 0, 6) };
+        leftPanel.Controls.Add(sep2);
 
-        _cBtnAdd   = MkBtn("➕ Add",        Color.FromArgb(26, 130, 60),  110, 32);
-        _cBtnSave  = MkBtn("💾 Save",       ACCENT,                       110, 32);
-        _cBtnDeact = MkBtn("⏸ Deactivate", Color.FromArgb(170, 100, 14), 120, 32);
-        _cBtnDel   = MkBtn("🗑 Delete",      Color.FromArgb(175, 35, 35),  100, 32);
-        _cBtnClr   = MkBtn("✖ Clear",        Color.FromArgb(60, 68, 100),  90, 32);
-        _cBtnAdd.Click += OnContentAdd; _cBtnSave.Click += OnContentSave;
-        _cBtnDeact.Click += OnContentDeact; _cBtnDel.Click += OnContentDel;
-        _cBtnClr.Click += (s, e) => ClearContentForm();
+        // Marker cards label
+        leftPanel.Controls.Add(new Label {
+            Text = "Marker Controls",
+            Dock = DockStyle.Top, Height = 20,
+            Font = new Font("Segoe UI", 8, FontStyle.Bold),
+            ForeColor = Color.FromArgb(120, 150, 200),
+            BackColor = Color.Transparent,
+            Padding = new Padding(2, 0, 0, 0) });
 
-        var btnRow = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 44,
-            FlowDirection = FlowDirection.LeftToRight, WrapContents = false,
-            BackColor = Color.Transparent, Padding = new Padding(0, 6, 0, 0) };
-        foreach (var b in new[] { _cBtnAdd, _cBtnSave, _cBtnDeact, _cBtnDel, _cBtnClr }) {
-            b.Font = new Font("Segoe UI", 9, FontStyle.Bold);
-            b.Margin = new Padding(0, 0, 8, 0);
-            btnRow.Controls.Add(b);
+        // Marker cards flow
+        var markerFlow = new FlowLayoutPanel {
+            Dock = DockStyle.Top, Height = 96,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true, BackColor = Color.Transparent,
+            Padding = new Padding(0, 6, 0, 0) };
+
+        var markerDefs = new (string Id, string Line1, string Line2, Color Clr)[] {
+            ("36", "M36 Rotate",  "Select User",   Color.FromArgb(80,  140, 220)),
+            ("38", "M38 Rotate",  "Select Field",  Color.FromArgb(180, 100, 220)),
+            ("39", "M39 Rotate",  "Change Value",  Color.FromArgb(220, 140,  40)),
+            ("40", "M40 Tap",     "Confirm Value", Color.FromArgb(40,  200, 100)),
+            ("41", "M41 Tap",     "Backspace",     Color.FromArgb(200,  80,  80)),
+            ("42", "M42 Tap",     "Finish Field",  Color.FromArgb(40,  180, 200)),
+            ("31", "M31 Tap",     "Add User",      Color.FromArgb(26,  130,  60)),
+            ("32", "M32 Tap",     "Save User",     ACCENT),
+            ("33", "M33 Tap",     "Deactivate",    Color.FromArgb(170, 100,  14)),
+            ("34", "M34 Tap",     "Delete User",   Color.FromArgb(175,  35,  35)),
+            ("35", "M35 Tap",     "Clear",         Color.FromArgb(60,   68, 100)),
+            ("37", "M37 Tap",     "Gaze History",  Color.FromArgb(0,   190, 160)),
+            ("20", "M20 Tap",     "Back",          Color.FromArgb(100,  60, 100)),
+        };
+
+        foreach (var (mid, line1, line2, clr) in markerDefs) {
+            var card = new Panel {
+                Size = new Size(104, 40),
+                BackColor = Color.FromArgb(18, 26, 50),
+                Margin = new Padding(0, 0, 7, 5) };
+            card.Paint += (s, e) => {
+                var g = e.Graphics;
+                // top accent bar
+                using (var b = new System.Drawing.SolidBrush(clr))
+                    g.FillRectangle(b, 0, 0, card.Width, 4);
+                // border
+                using (var p = new System.Drawing.Pen(Color.FromArgb(55, clr.R, clr.G, clr.B), 1f))
+                    g.DrawRectangle(p, 0, 0, card.Width - 1, card.Height - 1);
+            };
+            card.Controls.Add(new Label {
+                Text = line1,
+                Font = new Font("Segoe UI", 7, FontStyle.Bold),
+                ForeColor = clr, BackColor = Color.Transparent,
+                Location = new Point(6, 6), AutoSize = true });
+            card.Controls.Add(new Label {
+                Text = line2,
+                Font = new Font("Segoe UI", 8),
+                ForeColor = Color.FromArgb(210, 220, 242),
+                BackColor = Color.Transparent,
+                Location = new Point(6, 22), AutoSize = true });
+            markerFlow.Controls.Add(card);
         }
-        formWrap.Controls.Add(btnRow);
+        leftPanel.Controls.Add(markerFlow);
+
+        // ── RIGHT: editor card ───────────────────────────────────────────
+        _editorCard = new Panel { Dock = DockStyle.Fill,
+            BackColor = Color.FromArgb(12, 18, 38),
+            Padding = new Padding(12, 8, 12, 8) };
+        split.Controls.Add(_editorCard, 1, 0);
+
+        _editorCard.Paint += (s, e) => {
+            using (var pen = new System.Drawing.Pen(Color.FromArgb(50, 90, 180), 1.5f))
+                e.Graphics.DrawRectangle(pen, 1, 1, _editorCard.Width - 3, _editorCard.Height - 3);
+            using (var b = new System.Drawing.SolidBrush(ACCENT))
+                e.Graphics.FillRectangle(b, 1, 1, 4, _editorCard.Height - 2);
+        };
+
+        // Use TableLayoutPanel so rows never overflow
+        var edTbl = new TableLayoutPanel {
+            Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 11,
+            BackColor = Color.Transparent, Padding = new Padding(6, 0, 0, 0) };
+        edTbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        edTbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));  // 0 selected user
+        edTbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));  // 1 selected field
+        edTbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));  // 2 editing mode
+        edTbl.RowStyles.Add(new RowStyle(SizeType.Absolute,  6));  // 3 separator
+        edTbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 16));  // 4 "Current Text:" label
+        edTbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));  // 5 current text value
+        edTbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 16));  // 6 "Selected Character:" label
+        edTbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));  // 7 selected char value
+        edTbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 16));  // 8 "Character Preview:" label
+        edTbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));  // 9 char wheel row
+        edTbl.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // 10 instructions (fills rest)
+        _editorCard.Controls.Add(edTbl);
+
+        // Row 0: selected user
+        _hudUser = new Label {
+            Dock = DockStyle.Fill, Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            ForeColor = Color.White, BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true,
+            Padding = new Padding(2, 0, 0, 0), Text = "Selected User: —" };
+        edTbl.Controls.Add(_hudUser, 0, 0);
+
+        // Row 1: selected field
+        _hudField = new Label {
+            Dock = DockStyle.Fill, Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            ForeColor = EDIT_HL, BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true,
+            Padding = new Padding(2, 0, 0, 0), Text = "Selected Field: —" };
+        edTbl.Controls.Add(_hudField, 0, 1);
+
+        // Row 2: editing mode
+        _edModeLabel = new Label {
+            Dock = DockStyle.Fill, Font = new Font("Segoe UI", 8, FontStyle.Italic),
+            ForeColor = TXT_DIM, BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(2, 0, 0, 0), Text = "Editing Mode: Idle" };
+        edTbl.Controls.Add(_edModeLabel, 0, 2);
+
+        // Row 3: separator
+        edTbl.Controls.Add(new Panel { Dock = DockStyle.Fill,
+            BackColor = Color.FromArgb(40, 60, 100), Margin = new Padding(0, 2, 0, 2) }, 0, 3);
+
+        // Row 4: "Current Text:" caption
+        edTbl.Controls.Add(new Label {
+            Dock = DockStyle.Fill, Text = "Current Text:",
+            Font = new Font("Segoe UI", 7, FontStyle.Bold),
+            ForeColor = TXT_DIM, BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.BottomLeft, Padding = new Padding(2, 0, 0, 0) }, 0, 4);
+
+        // Row 5: current text value
+        _edCurrentText = new Label {
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 13, FontStyle.Bold),
+            ForeColor = EDIT_ACT, BackColor = Color.FromArgb(20, 32, 58),
+            TextAlign = ContentAlignment.MiddleCenter,
+            BorderStyle = BorderStyle.FixedSingle,
+            Margin = new Padding(0, 1, 0, 1),
+            AutoEllipsis = true, Text = "—" };
+        edTbl.Controls.Add(_edCurrentText, 0, 5);
+
+        // Row 6: "Selected Character:" caption
+        edTbl.Controls.Add(new Label {
+            Dock = DockStyle.Fill, Text = "Selected Character:",
+            Font = new Font("Segoe UI", 7, FontStyle.Bold),
+            ForeColor = TXT_DIM, BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.BottomLeft, Padding = new Padding(2, 0, 0, 0) }, 0, 6);
+
+        // Row 7: selected character — compact, not huge
+        _edSelectedChar = new Label {
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 13, FontStyle.Bold),
+            ForeColor = Color.Black, BackColor = EDIT_HL,
+            TextAlign = ContentAlignment.MiddleCenter,
+            BorderStyle = BorderStyle.FixedSingle,
+            Margin = new Padding(0, 1, 0, 1),
+            AutoEllipsis = true, Text = "—" };
+        edTbl.Controls.Add(_edSelectedChar, 0, 7);
+
+        // Row 8: "Character Preview:" caption
+        edTbl.Controls.Add(new Label {
+            Dock = DockStyle.Fill, Text = "Character Preview:",
+            Font = new Font("Segoe UI", 7, FontStyle.Bold),
+            ForeColor = TXT_DIM, BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.BottomLeft, Padding = new Padding(2, 0, 0, 0) }, 0, 8);
+
+        // Row 9: character wheel row (panel, filled dynamically)
+        _edCharRow = new Panel {
+            Dock = DockStyle.Fill, BackColor = Color.Transparent,
+            Margin = new Padding(0, 1, 0, 1) };
+        edTbl.Controls.Add(_edCharRow, 0, 9);
+
+        // Row 10: instructions (fills remaining space)
+        _hudInstructions = new Label {
+            Dock = DockStyle.Fill,
+            Font = new Font("Consolas", 7),
+            ForeColor = Color.FromArgb(90, 120, 170),
+            BackColor = Color.FromArgb(14, 20, 36),
+            Text = BuildInstructionText(),
+            Padding = new Padding(6, 4, 4, 4),
+            BorderStyle = BorderStyle.FixedSingle,
+            Margin = new Padding(0, 4, 0, 0) };
+        edTbl.Controls.Add(_hudInstructions, 0, 10);
+
+        // value label for non-text fields (replaces rows 6-9 content)
+        _edValueLabel = new Label {
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 13, FontStyle.Bold),
+            ForeColor = EDIT_ACT, BackColor = Color.FromArgb(20, 32, 58),
+            TextAlign = ContentAlignment.MiddleCenter,
+            BorderStyle = BorderStyle.FixedSingle,
+            Margin = new Padding(0, 1, 0, 1),
+            AutoEllipsis = true, Text = "—", Visible = false };
+        // not added to table — shown via overlay when needed
+
+        _hudValue = _hudMode = _hudChars = null;
+        _hudPanel = _editorCard;
+    }
+
+    private static string BuildInstructionText() =>
+        "M36 Rotate → Select user\r\n" +
+        "M38 Rotate → Select field\r\n" +
+        "M39 Rotate → Scroll character / change value\r\n" +
+        "M40 Tap    → Add selected character\r\n" +
+        "M41 Tap    → Backspace\r\n" +
+        "M42 Tap    → Finish field\r\n" +
+        "M31 Tap    → Add user\r\n" +
+        "M32 Tap    → Save user\r\n" +
+        "M33 Tap    → Deactivate  |  M34 → Delete\r\n" +
+        "M35 Tap    → Clear  |  M20 → Back";
+
+    private Label MkHudLabel(string text, float size, FontStyle style, Color color)
+    {
+        return new Label {
+            Text = text, Dock = DockStyle.Top, Height = 30,
+            Font = new Font("Segoe UI", size, style),
+            ForeColor = color, BackColor = Color.Transparent,
+            AutoEllipsis = true, Padding = new Padding(8, 4, 0, 0) };
+    }
+
+    private static Label MkFieldLabel()
+    {
+        return new Label {
+            Text = "—", Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 9),
+            ForeColor = TXT, BackColor = Color.FromArgb(28, 38, 65),
+            TextAlign = ContentAlignment.MiddleLeft,
+            Margin = new Padding(4, 4, 8, 4),
+            AutoEllipsis = true,
+            BorderStyle = BorderStyle.FixedSingle };
     }
 
     // ═════════════════════════════════════════════════════════════════════
@@ -498,7 +572,6 @@ public class ContentManagerPage : Form, TuioListener
             }
 
             _uGrid.SelectionChanged += OnURowSelected;
-            // Auto-select first row so form is populated immediately
             if (_uGrid.Rows.Count > 0) _uGrid.Rows[0].Selected = true;
         }
         catch (Exception ex) { LogErr(ex); ShowErr("Users load error", ex.Message); }
@@ -510,98 +583,431 @@ public class ContentManagerPage : Form, TuioListener
             if (_uGrid.SelectedRows.Count == 0) return;
             string id = _uGrid.SelectedRows[0].Cells["uId"].Value?.ToString() ?? "";
             var u = _uItems.FirstOrDefault(x => x.UserId == id);
-            if (u != null) FillUserForm(u);
+            if (u != null) FillUserDisplay(u);
         } catch { }
     }
 
-    private void FillUserForm(UserData u)
+    private void FillUserDisplay(UserData u)
     {
-        _uId.Text   = u.UserId ?? "";
-        _uName.Text = u.Name   ?? "";
-        _uAge.Value = Math.Max(1, Math.Min(120, u.Age == 0 ? 18 : u.Age));
-        SetCbo(_uGender, u.Gender ?? "Male");
-        SetCbo(_uLevel,  u.Level  ?? "Beginner");
-        _uBt.Text   = u.BluetoothId ?? "";
-        _uFace.Text = u.FaceId      ?? "";
-        SetCbo(_uRole, u.Role ?? "Player");
-        _uActive.Checked = u.IsActive;
+        _uId.Text     = u.UserId      ?? "—";
+        _uName.Text   = u.Name        ?? "—";
+        _uAge.Text    = u.Age.ToString();
+        _uGender.Text = u.Gender      ?? "—";
+        _uLevel.Text  = u.Level       ?? "—";
+        _uBt.Text     = u.BluetoothId ?? "—";
+        _uFace.Text   = u.FaceId      ?? "—";
+        _uRole.Text   = u.Role        ?? "—";
+        _uActive.Text = u.IsActive ? "true" : "false";
+
+        // Sync dropdown indices for fields that have options
+        SyncFieldOptionIdx(3, u.Gender      ?? "Male");
+        SyncFieldOptionIdx(4, u.Level       ?? "Beginner");
+        SyncFieldOptionIdx(7, u.Role        ?? "Player");
+        SyncFieldOptionIdx(8, u.IsActive ? "true" : "false");
+
+        UpdateHud();
     }
 
-    private UserData UserFromForm()
+    private void SyncFieldOptionIdx(int fieldIdx, string value)
+    {
+        var opts = FIELD_OPTIONS[fieldIdx];
+        if (opts == null) return;
+        for (int i = 0; i < opts.Length; i++)
+            if (string.Equals(opts[i], value, StringComparison.OrdinalIgnoreCase))
+            { _fieldOptionIdx[fieldIdx] = i; return; }
+        _fieldOptionIdx[fieldIdx] = 0;
+    }
+
+    // Returns the UserData currently shown in the display, with edits applied
+    private UserData UserFromDisplay()
     {
         string id = _uId.Text.Trim();
-        if (string.IsNullOrWhiteSpace(id))
+        if (string.IsNullOrWhiteSpace(id) || id == "—")
             id = "usr_" + Guid.NewGuid().ToString("N").Substring(0, 8);
         var existing = _uItems.FirstOrDefault(x => x.UserId == id);
+        int.TryParse(_uAge.Text, out int age);
+        bool.TryParse(_uActive.Text, out bool active);
         return new UserData {
             UserId      = id,
-            Name        = _uName.Text.Trim(),
-            Age         = (int)_uAge.Value,
-            Gender      = _uGender.SelectedItem?.ToString() ?? "Male",
-            Level       = _uLevel.SelectedItem?.ToString()  ?? "Beginner",
-            BluetoothId = _uBt.Text.Trim(),
-            FaceId      = _uFace.Text.Trim(),
-            Role        = _uRole.SelectedItem?.ToString()   ?? "Player",
-            IsActive    = _uActive.Checked,
+            Name        = _uName.Text == "—" ? "" : _uName.Text,
+            Age         = age == 0 ? 18 : age,
+            Gender      = _uGender.Text == "—" ? "Male" : _uGender.Text,
+            Level       = _uLevel.Text  == "—" ? "Beginner" : _uLevel.Text,
+            BluetoothId = _uBt.Text     == "—" ? "" : _uBt.Text,
+            FaceId      = _uFace.Text   == "—" ? "" : _uFace.Text,
+            Role        = _uRole.Text   == "—" ? "Player" : _uRole.Text,
+            IsActive    = active,
             GazeProfile = existing?.GazeProfile ?? new GazeProfile()
         };
     }
 
-    private void ClearUserForm()
+    private void ClearUserDisplay()
     {
-        _uId.Text = _uName.Text = _uBt.Text = _uFace.Text = "";
-        _uAge.Value = 18; _uActive.Checked = true;
-        if (_uGender.Items.Count > 0) _uGender.SelectedIndex = 0;
-        if (_uLevel.Items.Count  > 0) _uLevel.SelectedIndex  = 0;
-        if (_uRole.Items.Count   > 0) _uRole.SelectedIndex   = 0;
+        _uId.Text = _uName.Text = _uAge.Text = _uGender.Text = _uLevel.Text =
+        _uBt.Text = _uFace.Text = _uRole.Text = _uActive.Text = "—";
+        _textEditMode = false; _textEditBuffer = ""; _charWheelIdx = 0;
+        UpdateHud();
     }
 
-    private void OnUserAdd(object sender, EventArgs e)
+    // ── TUIO field editing ────────────────────────────────────────────────
+
+    private Label GetFieldLabel(int idx)
+    {
+        switch (idx) {
+            case 0: return _uId;   case 1: return _uName;
+            case 2: return _uAge;  case 3: return _uGender;
+            case 4: return _uLevel;case 5: return _uBt;
+            case 6: return _uFace; case 7: return _uRole;
+            case 8: return _uActive;
+        }
+        return null;
+    }
+
+    // Highlight the currently selected field label
+    private void HighlightSelectedField()
+    {
+        for (int i = 0; i < FIELD_NAMES.Length; i++) {
+            var lbl = GetFieldLabel(i);
+            if (lbl == null) continue;
+            lbl.BackColor = (i == _selectedFieldIdx)
+                ? (_textEditMode ? Color.FromArgb(50, 30, 10) : Color.FromArgb(30, 50, 80))
+                : FIELD_BG;
+            lbl.ForeColor = (i == _selectedFieldIdx)
+                ? (_textEditMode ? EDIT_HL : EDIT_ACT)
+                : TXT;
+        }
+    }
+
+    // Apply a value change to the selected field (dropdown/numeric)
+    private void ApplyFieldValueChange(int direction)
+    {
+        int fi = _selectedFieldIdx;
+        var opts = FIELD_OPTIONS[fi];
+
+        if (opts != null) {
+            // Dropdown field
+            _fieldOptionIdx[fi] = (_fieldOptionIdx[fi] + direction + opts.Length) % opts.Length;
+            GetFieldLabel(fi).Text = opts[_fieldOptionIdx[fi]];
+        }
+        else if (fi == 2) {
+            // Age: numeric
+            int.TryParse(_uAge.Text, out int age);
+            age = Math.Max(1, Math.Min(120, age + direction));
+            _uAge.Text = age.ToString();
+        }
+        else {
+            // Text field: enter text edit mode
+            if (!_textEditMode) {
+                _textEditMode = true;
+                string cur = GetFieldLabel(fi).Text;
+                _textEditBuffer = (cur == "—") ? "" : cur;
+                _charWheelIdx = 0;
+            }
+            // Scroll char wheel
+            _charWheelIdx = (_charWheelIdx + direction + CHAR_WHEEL.Length) % CHAR_WHEEL.Length;
+        }
+        UpdateHud();
+    }
+
+    // Confirm current char (M40) — only for text fields
+    private void ConfirmChar()
+    {
+        if (!_textEditMode) return;
+        _textEditBuffer += CHAR_WHEEL[_charWheelIdx];
+        GetFieldLabel(_selectedFieldIdx).Text = _textEditBuffer + "█";
+        UpdateHud();
+    }
+
+    // Delete last char (M41)
+    private void DeleteChar()
+    {
+        if (!_textEditMode) return;
+        if (_textEditBuffer.Length > 0)
+            _textEditBuffer = _textEditBuffer.Substring(0, _textEditBuffer.Length - 1);
+        GetFieldLabel(_selectedFieldIdx).Text =
+            (_textEditBuffer.Length > 0 ? _textEditBuffer : "—") + (_textEditMode ? "█" : "");
+        UpdateHud();
+    }
+
+    // Finish editing field (M42)
+    private void FinishField()
+    {
+        if (_textEditMode) {
+            GetFieldLabel(_selectedFieldIdx).Text =
+                _textEditBuffer.Length > 0 ? _textEditBuffer : "—";
+            _textEditMode = false;
+            _textEditBuffer = "";
+        }
+        UpdateHud();
+    }
+
+    private void UpdateHud()
+    {
+        if (_hudUser == null || _editorCard == null) return;
+
+        // ── top info ──────────────────────────────────────────────────────
+        string userName = "—";
+        if (_uGrid?.SelectedRows.Count > 0)
+            userName = _uGrid.SelectedRows[0].Cells["uName"].Value?.ToString() ?? "—";
+        _hudUser.Text  = $"Selected User:  {userName}";
+        _hudField.Text = $"Selected Field:  {FIELD_NAMES[_selectedFieldIdx]}";
+
+        bool isTextField = FIELD_OPTIONS[_selectedFieldIdx] == null && _selectedFieldIdx != 2;
+
+        // Current text always shows the real field value (strip cursor marker)
+        string fieldVal = GetFieldLabel(_selectedFieldIdx)?.Text?.Replace("█", "") ?? "—";
+
+        if (isTextField) {
+            _edModeLabel.Text      = _textEditMode ? "Editing Mode:  Text Editing" : "Editing Mode:  Text Field";
+            _edModeLabel.ForeColor = _textEditMode ? EDIT_HL : TXT_DIM;
+
+            // Current text: show buffer while editing, else real value
+            _edCurrentText.Text    = _textEditMode
+                ? (_textEditBuffer.Length > 0 ? _textEditBuffer : "(empty)")
+                : (fieldVal == "—" || string.IsNullOrEmpty(fieldVal) ? "(empty)" : fieldVal);
+            _edCurrentText.Visible = true;
+
+            // Selected character: only meaningful while editing
+            _edSelectedChar.Text    = _textEditMode
+                ? CharDisplay(CHAR_WHEEL[_charWheelIdx])
+                : "—  (rotate M39 to start)";
+            _edSelectedChar.Font    = new Font("Segoe UI", 11, FontStyle.Bold);
+            _edSelectedChar.Visible = true;
+
+            _edCharRow.Visible = _textEditMode;
+            if (_textEditMode) BuildCharWheelTiles();
+        }
+        else {
+            _edModeLabel.Text      = "Editing Mode:  Value Select";
+            _edModeLabel.ForeColor = EDIT_ACT;
+
+            _edCurrentText.Text    = fieldVal;
+            _edCurrentText.Visible = true;
+
+            _edSelectedChar.Text    = "Rotate M39 to change";
+            _edSelectedChar.Font    = new Font("Segoe UI", 9, FontStyle.Italic);
+            _edSelectedChar.Visible = true;
+            _edCharRow.Visible      = false;
+        }
+
+        HighlightSelectedField();
+        _editorCard.Invalidate();
+    }
+
+    private static string CharDisplay(char c)
+    {
+        if (c == ' ')  return "SPACE";
+        if (c == '_')  return "_";
+        if (c == ':')  return ":";
+        if (c == '-')  return "-";
+        return c.ToString();
+    }
+
+    private void BuildCharWheelTiles()
+    {
+        _edCharRow.Controls.Clear();
+        int len   = CHAR_WHEEL.Length;
+        int total = 9;   // show 9 chars: 4 before, current, 4 after
+        int half  = total / 2;
+        int tileW = Math.Max(28, (_edCharRow.Width - 4) / total);
+        int tileH = _edCharRow.Height - 4;
+
+        for (int i = -half; i <= half; i++) {
+            int idx = (_charWheelIdx + i + len) % len;
+            char c  = CHAR_WHEEL[idx];
+            bool isCurrent = (i == 0);
+
+            var tile = new Label {
+                Text      = CharDisplay(c),
+                Size      = new Size(tileW, tileH),
+                Location  = new Point(2 + (i + half) * tileW, 2),
+                Font      = new Font("Segoe UI", isCurrent ? 11 : 8,
+                                     isCurrent ? FontStyle.Bold : FontStyle.Regular),
+                ForeColor = isCurrent ? Color.Black : Color.FromArgb(160, 180, 220),
+                BackColor = isCurrent ? EDIT_HL : Color.FromArgb(22, 32, 58),
+                TextAlign = ContentAlignment.MiddleCenter,
+                BorderStyle = BorderStyle.FixedSingle };
+            _edCharRow.Controls.Add(tile);
+        }
+    }
+
+    // ── User CRUD actions ─────────────────────────────────────────────────
+    private void DoUserAdd()
     {
         try {
-            _uId.Text = "";
-            var u = UserFromForm();
-            if (string.IsNullOrWhiteSpace(u.Name)) { ShowErr("Validation", "Name is required."); return; }
+            var u = UserFromDisplay();
+            u.UserId = "usr_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+            if (string.IsNullOrWhiteSpace(u.Name) || u.Name == "—")
+            { ShowErr("Validation", "Name is required."); return; }
             _userSvc.AddUser(u); ReloadUsers();
             MessageBox.Show($"User '{u.Name}' added.", "Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
         } catch (Exception ex) { LogErr(ex); ShowErr("Error", ex.Message); }
     }
 
-    private void OnUserSave(object sender, EventArgs e)
+    private void DoUserSave()
     {
         try {
-            var u = UserFromForm();
-            if (string.IsNullOrWhiteSpace(u.Name)) { ShowErr("Validation", "Name is required."); return; }
+            var u = UserFromDisplay();
+            if (string.IsNullOrWhiteSpace(u.Name) || u.Name == "—")
+            { ShowErr("Validation", "Name is required."); return; }
             _userSvc.UpdateUser(u); ReloadUsers();
             MessageBox.Show($"User '{u.Name}' saved.", "Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
         } catch (Exception ex) { LogErr(ex); ShowErr("Error", ex.Message); }
     }
 
-    private void OnUserDeact(object sender, EventArgs e)
+    private void DoUserDeact()
     {
         try {
             string id = _uId.Text.Trim();
-            if (string.IsNullOrWhiteSpace(id)) { ShowErr("Validation", "Select a user first."); return; }
+            if (string.IsNullOrWhiteSpace(id) || id == "—")
+            { ShowErr("Validation", "Select a user first."); return; }
             _userSvc.DeactivateUser(id); ReloadUsers();
             MessageBox.Show($"User '{id}' deactivated.", "Done", MessageBoxButtons.OK, MessageBoxIcon.Information);
         } catch (Exception ex) { LogErr(ex); ShowErr("Error", ex.Message); }
     }
 
-    private void OnUserDel(object sender, EventArgs e)
+    private void DoUserDel()
     {
         try {
             string id = _uId.Text.Trim();
-            if (string.IsNullOrWhiteSpace(id)) { ShowErr("Validation", "Select a user first."); return; }
+            if (string.IsNullOrWhiteSpace(id) || id == "—")
+            { ShowErr("Validation", "Select a user first."); return; }
             var u = _uItems.FirstOrDefault(x => x.UserId == id);
             if (MessageBox.Show($"Delete '{u?.Name ?? id}'?", "Confirm",
                 MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
-            _userSvc.DeleteUser(id); ReloadUsers(); ClearUserForm();
+            _userSvc.DeleteUser(id); ReloadUsers(); ClearUserDisplay();
         } catch (Exception ex) { LogErr(ex); ShowErr("Error", ex.Message); }
     }
 
     // ═════════════════════════════════════════════════════════════════════
-    //  CONTENT CRUD
+    //  CONTENT TAB  (unchanged)
     // ═════════════════════════════════════════════════════════════════════
+    private void BuildContentTab(TabPage tab)
+    {
+        var outer = new TableLayoutPanel {
+            Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1,
+            BackColor = PANEL };
+        outer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
+        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
+        tab.Controls.Add(outer);
+
+        var filterBar = new Panel { Dock = DockStyle.Fill, BackColor = HEADER,
+            Padding = new Padding(10, 7, 10, 7) };
+        outer.Controls.Add(filterBar, 0, 0);
+
+        var fSearch = MkTxt(160); fSearch.ForeColor = TXT_DIM; fSearch.Text = "Search...";
+        fSearch.GotFocus  += (s, e) => { if (fSearch.Text == "Search...") { fSearch.Text = ""; fSearch.ForeColor = TXT; } };
+        fSearch.LostFocus += (s, e) => { if (fSearch.Text == "") { fSearch.Text = "Search..."; fSearch.ForeColor = TXT_DIM; } };
+        var fLevel  = MkCbo(new[] { "All Levels","Beginner","Intermediate","Advanced" }, 130);
+        var fModule = MkCbo(new[] { "All Modules","Padel Shots","Padel Rules","Practice",
+            "Quick Challenge","Speed Mode","Competition","AI Vision Coach" }, 155);
+        var fActive = new CheckBox { Text = "Active only", Checked = true,
+            Font = new Font("Segoe UI", 9), ForeColor = TXT,
+            AutoSize = true, BackColor = Color.Transparent, Margin = new Padding(4, 7, 8, 0) };
+        var bRef = MkBtn("Refresh", ACCENT, 80, 28);
+        bRef.Click += (s, e) => ReloadContent(
+            fSearch.Text == "Search..." ? "" : fSearch.Text,
+            fLevel.SelectedItem?.ToString(), fModule.SelectedItem?.ToString(), fActive.Checked);
+
+        var ff = new FlowLayoutPanel { Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight, WrapContents = false,
+            BackColor = Color.Transparent };
+        void AF(Control c, int g = 8) { c.Margin = new Padding(0, 0, g, 0); ff.Controls.Add(c); }
+        AF(new Label { Text = "Training Content", Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            ForeColor = ACCENT, AutoSize = true, BackColor = Color.Transparent,
+            Margin = new Padding(0, 5, 20, 0) });
+        AF(fSearch); AF(fLevel); AF(fModule); ff.Controls.Add(fActive); AF(bRef, 0);
+        filterBar.Controls.Add(ff);
+
+        var gridWrap = new Panel { Dock = DockStyle.Fill, BackColor = PANEL,
+            Padding = new Padding(12, 8, 12, 4) };
+        outer.Controls.Add(gridWrap, 0, 1);
+        _cGrid = MkGrid();
+        _cGrid.Dock = DockStyle.Fill;
+        _cGrid.SelectionChanged += OnCRowSelected;
+        gridWrap.Controls.Add(_cGrid);
+
+        var formWrap = new Panel { Dock = DockStyle.Fill, BackColor = PANEL2,
+            Padding = new Padding(12, 8, 12, 8), AutoScroll = true };
+        outer.Controls.Add(formWrap, 0, 2);
+
+        formWrap.Controls.Add(new Label {
+            Text = "Add / Edit Training Content", Dock = DockStyle.Top, Height = 26,
+            Font = new Font("Segoe UI", 10, FontStyle.Bold),
+            ForeColor = ACCENT, BackColor = Color.Transparent });
+
+        _cId = MkTxt(0); _cTitle = MkTxt(0);
+        _cLevel  = MkCbo(new[] { "Beginner","Intermediate","Advanced" }, 0);
+        _cMarker = MkCbo(new[] { "3","4","5","6","7","8" }, 0);
+        _cModule = MkCbo(new[] { "Padel Shots","Padel Rules","Practice",
+            "Quick Challenge","Speed Mode","Competition","AI Vision Coach" }, 0);
+        _cActivity = new ComboBox { DropDownStyle = ComboBoxStyle.DropDown,
+            Font = new Font("Segoe UI", 9), Dock = DockStyle.Fill };
+        _cActivity.Items.AddRange(new object[] { "Shot Training","Rules Training",
+            "Court Positioning","Net Control","Smash Position","Forehand Position",
+            "Backhand Position","Volley","Wall Practice","Serve Practice",
+            "Reaction Training","Competition Movement" });
+        _cDesc = MkTxt(0, true); _cTip = MkTxt(0, true);
+        _cZone = MkTxt(0);
+        _cDiff = MkCbo(new[] { "Beginner","Intermediate","Advanced" }, 0);
+        _cActive = new CheckBox { Text = "Active", Checked = true,
+            Font = new Font("Segoe UI", 9), ForeColor = TXT,
+            AutoSize = true, BackColor = Color.Transparent };
+
+        var cGrid = new TableLayoutPanel {
+            Dock = DockStyle.Fill, ColumnCount = 6, RowCount = 4,
+            BackColor = Color.Transparent, Padding = new Padding(0, 4, 0, 4) };
+        for (int i = 0; i < 6; i++)
+            cGrid.ColumnStyles.Add(new ColumnStyle(
+                i % 2 == 0 ? SizeType.Absolute : SizeType.Percent,
+                i % 2 == 0 ? 90 : 33.3f));
+        cGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        cGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        cGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
+        cGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+
+        void ACF(string lbl, Control ctrl, int col, int row) {
+            cGrid.Controls.Add(new Label {
+                Text = lbl, Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                ForeColor = TXT_DIM, Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleRight,
+                Margin = new Padding(0, 0, 6, 0), BackColor = Color.Transparent }, col, row);
+            ctrl.Dock = DockStyle.Fill; ctrl.Margin = new Padding(0, 3, 12, 3);
+            if (ctrl is TextBox tb) { tb.BackColor = FIELD_BG; tb.ForeColor = TXT; tb.BorderStyle = BorderStyle.FixedSingle; }
+            cGrid.Controls.Add(ctrl, col + 1, row);
+        }
+
+        ACF("ID",       _cId,       0, 0); ACF("Title",    _cTitle,    2, 0); ACF("Level",  _cLevel,  4, 0);
+        ACF("Marker",   _cMarker,   0, 1); ACF("Module",   _cModule,   2, 1); ACF("Activity",_cActivity,4,1);
+        ACF("Desc",     _cDesc,     0, 2); ACF("Coach Tip", _cTip,     2, 2);
+        ACF("Zone",     _cZone,     4, 2);
+        ACF("Difficulty",_cDiff,    0, 3);
+        _cActive.Margin = new Padding(4, 8, 0, 0);
+        cGrid.Controls.Add(_cActive, 3, 3);
+        formWrap.Controls.Add(cGrid);
+
+        _cBtnAdd   = MkBtn("➕ Add",        Color.FromArgb(26, 130, 60),  110, 32);
+        _cBtnSave  = MkBtn("💾 Save",       ACCENT,                       110, 32);
+        _cBtnDeact = MkBtn("⏸ Deactivate", Color.FromArgb(170, 100, 14), 120, 32);
+        _cBtnDel   = MkBtn("🗑 Delete",      Color.FromArgb(175, 35, 35),  100, 32);
+        _cBtnClr   = MkBtn("✖ Clear",        Color.FromArgb(60, 68, 100),  90, 32);
+        _cBtnAdd.Click += OnContentAdd; _cBtnSave.Click += OnContentSave;
+        _cBtnDeact.Click += OnContentDeact; _cBtnDel.Click += OnContentDel;
+        _cBtnClr.Click += (s, e) => ClearContentForm();
+
+        var btnRow = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 44,
+            FlowDirection = FlowDirection.LeftToRight, WrapContents = false,
+            BackColor = Color.Transparent, Padding = new Padding(0, 6, 0, 0) };
+        foreach (var b in new[] { _cBtnAdd, _cBtnSave, _cBtnDeact, _cBtnDel, _cBtnClr }) {
+            b.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+            b.Margin = new Padding(0, 0, 8, 0);
+            btnRow.Controls.Add(b);
+        }
+        formWrap.Controls.Add(btnRow);
+    }
+
     private void ReloadContent(string search = "", string level = null,
                                string module = null, bool activeOnly = true)
     {
@@ -732,6 +1138,209 @@ public class ContentManagerPage : Form, TuioListener
     }
 
     // ═════════════════════════════════════════════════════════════════════
+    //  TUIO MARKER HANDLING
+    // ═════════════════════════════════════════════════════════════════════
+    private void OnGesture(int id) {
+        if (!Visible || IsDisposed) return;
+        if (!GestureRouter.HasFocus(this)) return;
+        BeginInvoke((MethodInvoker)(() => DispatchMarker(id)));
+    }
+
+    public void addTuioObject(TuioObject o)
+    {
+        if (!IsHandleCreated || IsDisposed) return;
+        if (!GestureRouter.HasFocus(this)) return;
+        BeginInvoke((MethodInvoker)(() => DispatchMarker(o.SymbolID)));
+    }
+
+    public void updateTuioObject(TuioObject o)
+    {
+        if (!IsHandleCreated || IsDisposed) return;
+        if (!GestureRouter.HasFocus(this)) return;
+        int id = o.SymbolID;
+        float angle = o.Angle;
+
+        if (id == 36)
+            BeginInvoke((MethodInvoker)(() => HandleRotation(ref _m36Angle, ref _m36Time, angle, MoveUserSelection)));
+        else if (id == 38)
+            BeginInvoke((MethodInvoker)(() => HandleRotation(ref _m38Angle, ref _m38Time, angle, MoveFieldSelection)));
+        else if (id == 39)
+            BeginInvoke((MethodInvoker)(() => HandleRotation(ref _m39Angle, ref _m39Time, angle, ApplyFieldValueChange)));
+    }
+
+    private void HandleRotation(ref float lastAngle, ref DateTime lastTime,
+                                 float angle, Action<int> onStep)
+    {
+        if ((DateTime.Now - lastTime).TotalMilliseconds < 300) return;
+
+        if (float.IsNaN(lastAngle)) { lastAngle = angle; return; }
+
+        float delta = angle - lastAngle;
+        if (delta >  (float)Math.PI) delta -= 2f * (float)Math.PI;
+        if (delta < -(float)Math.PI) delta += 2f * (float)Math.PI;
+
+        if (Math.Abs(delta) < ROT_THRESHOLD) return;
+
+        int dir = delta > 0 ? 1 : -1;
+        lastAngle = angle;
+        lastTime  = DateTime.Now;
+        onStep(dir);
+    }
+
+    private void MoveUserSelection(int direction)
+    {
+        if (_uGrid == null || _uGrid.Rows.Count == 0) return;
+        int current = _uGrid.SelectedRows.Count > 0 ? _uGrid.SelectedRows[0].Index : -1;
+        int next = Math.Max(0, Math.Min(_uGrid.Rows.Count - 1, current + direction));
+        if (next == current) return;
+        _uGrid.ClearSelection();
+        _uGrid.Rows[next].Selected = true;
+        _uGrid.FirstDisplayedScrollingRowIndex = next;
+    }
+
+    private void MoveFieldSelection(int direction)
+    {
+        _selectedFieldIdx = (_selectedFieldIdx + direction + FIELD_NAMES.Length) % FIELD_NAMES.Length;
+        // Exit text edit mode when switching fields
+        if (_textEditMode) FinishField();
+        UpdateHud();
+    }
+
+    private void DispatchMarker(int id)
+    {
+        // Rotation markers handled in updateTuioObject — reset on add
+        if (id == 36) { _m36Angle = float.NaN; return; }
+        if (id == 38) { _m38Angle = float.NaN; return; }
+        if (id == 39) { _m39Angle = float.NaN; return; }
+
+        if (id == 20) { Close(); return; }
+
+        // Debounce tap markers
+        bool sameCd = id == _lastAction &&
+            (DateTime.Now - _lastActTime).TotalMilliseconds < ACTION_CD_MS;
+        if (sameCd) return;
+        _lastAction  = id;
+        _lastActTime = DateTime.Now;
+
+        switch (id)
+        {
+            case 31: DoUserAdd();    break;
+            case 32: DoUserSave();   break;
+            case 33: DoUserDeact();  break;
+            case 34: DoUserDel();    break;
+            case 35: ClearUserDisplay(); break;
+            case 37: ShowGazeHistory();  break;
+            // Text editing markers
+            case 40: ConfirmChar();  break;
+            case 41: DeleteChar();   break;
+            case 42: FinishField();  break;
+        }
+    }
+
+    public void removeTuioObject(TuioObject o)
+    {
+        if (o.SymbolID == 36) _m36Angle = float.NaN;
+        if (o.SymbolID == 38) _m38Angle = float.NaN;
+        if (o.SymbolID == 39) _m39Angle = float.NaN;
+    }
+
+    public void addTuioCursor(TuioCursor c)    { }
+    public void updateTuioCursor(TuioCursor c) { }
+    public void removeTuioCursor(TuioCursor c) { }
+    public void addTuioBlob(TuioBlob b)        { }
+    public void updateTuioBlob(TuioBlob b)     { }
+    public void removeTuioBlob(TuioBlob b)     { }
+    public void refresh(TuioTime t)            { }
+
+    // ═════════════════════════════════════════════════════════════════════
+    //  GAZE HISTORY POPUP
+    // ═════════════════════════════════════════════════════════════════════
+    private void ShowGazeHistory()
+    {
+        if (_uGrid == null || _uGrid.SelectedRows.Count == 0) {
+            MessageBox.Show("Select a user first (rotate Marker 36).",
+                "Gaze History", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        int idx = _uGrid.SelectedRows[0].Index;
+        if (idx < 0 || idx >= _uItems.Count) return;
+        var user = _uItems[idx];
+
+        var sessions = GazeReportService.GetRecent(user.UserId, 5);
+        var trends   = GazeReportService.GetTrends(user.UserId, 5);
+
+        var popup = new Form {
+            Text = $"Gaze History — {user.Name}",
+            Size = new Size(620, 500),
+            StartPosition = FormStartPosition.CenterParent,
+            BackColor = Color.FromArgb(14, 22, 44),
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false, MinimizeBox = false };
+
+        var scrollPanel = new Panel {
+            Dock = DockStyle.Fill, AutoScroll = true,
+            BackColor = Color.Transparent, Padding = new Padding(16, 12, 16, 12) };
+        popup.Controls.Add(scrollPanel);
+
+        int y = 0;
+        void AddLbl(string text, float size, FontStyle style, Color color, int height) {
+            scrollPanel.Controls.Add(new Label {
+                Text = text, Font = new Font("Segoe UI", size, style),
+                ForeColor = color, AutoSize = false,
+                Size = new Size(560, height), Location = new Point(0, y),
+                BackColor = Color.Transparent });
+            y += height + 2;
+        }
+
+        AddLbl($"📈  Gaze Tracking History for {user.Name}", 14, FontStyle.Bold, Color.White, 32);
+
+        var gp = user.GazeProfile ?? new GazeProfile();
+        AddLbl($"Current Profile:  Strokes={gp.Strokes_Score}  Rules={gp.Rules_Score}  " +
+               $"Practice={gp.Practice_Score}  Quiz={gp.Quiz_Score}  " +
+               $"Spelling={gp.Spelling_Score}  Competition={gp.Competition_Score}",
+               9, FontStyle.Italic, Color.FromArgb(140, 175, 225), 22);
+
+        string trendLine = "Trends: ";
+        foreach (var kvp in trends) {
+            string arrow = kvp.Value > 0 ? "↑" : kvp.Value < 0 ? "↓" : "→";
+            trendLine += $"{kvp.Key}{arrow}  ";
+        }
+        AddLbl(trendLine, 9, FontStyle.Bold, Color.FromArgb(60, 210, 160), 20);
+
+        scrollPanel.Controls.Add(new Panel {
+            Size = new Size(560, 1), Location = new Point(0, y),
+            BackColor = Color.FromArgb(45, 65, 100) });
+        y += 8;
+
+        if (sessions.Count == 0) {
+            AddLbl("No gaze sessions recorded yet for this user.", 11, FontStyle.Regular,
+                Color.FromArgb(160, 180, 210), 30);
+        } else {
+            for (int i = sessions.Count - 1; i >= 0; i--) {
+                var s = sessions[i];
+                string when = s.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+                string dur  = TimeSpan.FromSeconds(s.DurationSeconds).ToString(@"mm\:ss");
+                AddLbl($"Session {i+1}  •  {when}  •  {dur}  •  {s.TotalFixations} fixations",
+                    10, FontStyle.Bold, Color.White, 24);
+                string info = $"Dominant: {s.DominantCategory}";
+                if (s.NeglectedCategories?.Count > 0)
+                    info += $"  |  Neglected: {string.Join(", ", s.NeglectedCategories)}";
+                AddLbl(info, 9, FontStyle.Regular, Color.FromArgb(130, 165, 215), 20);
+                if (s.SessionScores != null) {
+                    string scores = "Scores: ";
+                    foreach (var sc in s.SessionScores) scores += $"{sc.Key}={sc.Value}  ";
+                    AddLbl(scores, 8, FontStyle.Regular, Color.FromArgb(100, 140, 195), 18);
+                }
+                scrollPanel.Controls.Add(new Panel {
+                    Size = new Size(540, 1), Location = new Point(10, y + 4),
+                    BackColor = Color.FromArgb(35, 55, 85) });
+                y += 14;
+            }
+        }
+        popup.ShowDialog(this);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════
     //  HELPERS
     // ═════════════════════════════════════════════════════════════════════
     private static DataGridView MkGrid()
@@ -743,8 +1352,7 @@ public class ContentManagerPage : Form, TuioListener
             BackgroundColor = Color.FromArgb(18, 26, 48),
             GridColor = Color.FromArgb(36, 50, 84),
             BorderStyle = BorderStyle.None, RowHeadersVisible = false,
-            Font = new Font("Segoe UI", 9),
-            ColumnHeadersHeight = 30,
+            Font = new Font("Segoe UI", 9), ColumnHeadersHeight = 30,
             CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal };
         g.RowTemplate.Height = 26;
         g.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(12, 18, 40);
@@ -762,8 +1370,7 @@ public class ContentManagerPage : Form, TuioListener
     private static Button MkBtn(string text, Color back, int w, int h)
     {
         var b = new Button { Text = text, BackColor = back, ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
-            Size = new Size(w, h) };
+            FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Size = new Size(w, h) };
         b.FlatAppearance.BorderSize = 0;
         return b;
     }
@@ -806,311 +1413,4 @@ public class ContentManagerPage : Form, TuioListener
                 $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}\n{new string('-',60)}\n");
         } catch { }
     }
-
-    // ── TUIO ──────────────────────────────────────────────────────────────
-    private void OnGesture(int id) {
-        if (!Visible || IsDisposed) return;
-        BeginInvoke((MethodInvoker)(() => DispatchMarker(id)));
-    }
-
-    public void addTuioObject(TuioObject o)
-    {
-        if (!IsHandleCreated || IsDisposed) return;
-        BeginInvoke((MethodInvoker)(() => DispatchMarker(o.SymbolID)));
-    }
-
-    /// <summary>
-    /// updateTuioObject fires continuously while a marker is on the table.
-    /// We use it to track Marker 36 rotation for user selection.
-    /// </summary>
-    public void updateTuioObject(TuioObject o)
-    {
-        if (o.SymbolID != 36) return;
-        if (!IsHandleCreated || IsDisposed) return;
-
-        float angle = o.Angle;   // radians, 0..2π
-        BeginInvoke((MethodInvoker)(() => HandleMarker36Rotation(angle)));
-    }
-
-    private void HandleMarker36Rotation(float angle)
-    {
-        // Debounce: skip if moved too recently
-        if ((DateTime.Now - _marker36LastMove).TotalMilliseconds < 350) return;
-
-        if (float.IsNaN(_marker36LastAngle))
-        {
-            // First detection — just record angle, don't move yet
-            _marker36LastAngle = angle;
-            return;
-        }
-
-        // Compute signed angular delta (handle wrap-around at 0/2π)
-        float delta = angle - _marker36LastAngle;
-        if (delta >  (float)Math.PI) delta -= 2f * (float)Math.PI;
-        if (delta < -(float)Math.PI) delta += 2f * (float)Math.PI;
-
-        if (Math.Abs(delta) < ROTATION_THRESHOLD) return;
-
-        // delta > 0 = clockwise = next user; delta < 0 = counter-clockwise = previous
-        int direction = delta > 0 ? 1 : -1;
-        _marker36LastAngle = angle;
-        _marker36LastMove  = DateTime.Now;
-
-        MoveUserSelection(direction);
-    }
-
-    private void MoveUserSelection(int direction)
-    {
-        if (_uGrid == null || _uGrid.Rows.Count == 0) return;
-
-        int current = _uGrid.SelectedRows.Count > 0
-            ? _uGrid.SelectedRows[0].Index
-            : -1;
-
-        int next = current + direction;
-        next = Math.Max(0, Math.Min(_uGrid.Rows.Count - 1, next));
-
-        if (next == current) return;
-
-        _uGrid.ClearSelection();
-        _uGrid.Rows[next].Selected = true;
-        _uGrid.FirstDisplayedScrollingRowIndex = next;
-        Console.WriteLine($"[ContentManager] Marker 36 → row {next}");
-    }
-
-    private void DispatchMarker(int id)
-    {
-        Console.WriteLine($"[ContentManager] Marker {id} detected");
-
-        // Marker 36 handled via updateTuioObject rotation — reset angle on add
-        if (id == 36) { _marker36LastAngle = float.NaN; return; }
-
-        // Marker 20 = Back (no cooldown needed)
-        if (id == 20) { Close(); return; }
-
-        // Action markers 31-35: debounce
-        bool sameCooldown = id == _lastActionMarker &&
-            (DateTime.Now - _lastActionTime).TotalMilliseconds < ACTION_COOLDOWN_MS;
-        if (sameCooldown) return;
-        _lastActionMarker = id;
-        _lastActionTime   = DateTime.Now;
-
-        switch (id)
-        {
-            case 31:
-                Console.WriteLine("[ContentManager] Marker 31 → Add User");
-                OnUserAdd(this, EventArgs.Empty);
-                break;
-            case 32:
-                Console.WriteLine("[ContentManager] Marker 32 → Save/Update User");
-                OnUserSave(this, EventArgs.Empty);
-                break;
-            case 33:
-                Console.WriteLine("[ContentManager] Marker 33 → Deactivate User");
-                OnUserDeact(this, EventArgs.Empty);
-                break;
-            case 34:
-                Console.WriteLine("[ContentManager] Marker 34 → Delete User");
-                OnUserDel(this, EventArgs.Empty);
-                break;
-            case 35:
-                Console.WriteLine("[ContentManager] Marker 35 → Clear Form");
-                ClearUserForm();
-                break;
-            case 37:
-                Console.WriteLine("[ContentManager] Marker 37 → Show Gaze History");
-                ShowGazeHistory();
-                break;
-        }
-    }
-
-    /// <summary>
-    /// Opens a popup showing the last 5 gaze session reports for the selected user.
-    /// Triggered by Marker 37 in the admin Users tab.
-    /// </summary>
-    private void ShowGazeHistory()
-    {
-        // Get selected user
-        if (_uGrid == null || _uGrid.SelectedRows.Count == 0)
-        {
-            MessageBox.Show("Select a user first (rotate Marker 36).",
-                "Gaze History", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
-
-        int idx = _uGrid.SelectedRows[0].Index;
-        if (idx < 0 || idx >= _uItems.Count) return;
-        var user = _uItems[idx];
-
-        var sessions = GazeReportService.GetRecent(user.UserId, 5);
-        var trends = GazeReportService.GetTrends(user.UserId, 5);
-
-        // Build the popup form
-        var popup = new Form
-        {
-            Text = $"Gaze History \u2014 {user.Name}",
-            Size = new Size(620, 500),
-            StartPosition = FormStartPosition.CenterParent,
-            BackColor = Color.FromArgb(14, 22, 44),
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false, MinimizeBox = false,
-        };
-
-        var scrollPanel = new Panel
-        {
-            Dock = DockStyle.Fill,
-            AutoScroll = true,
-            BackColor = Color.Transparent,
-            Padding = new Padding(16, 12, 16, 12)
-        };
-        popup.Controls.Add(scrollPanel);
-
-        int y = 0;
-
-        // Title
-        scrollPanel.Controls.Add(new Label
-        {
-            Text = $"\ud83d\udcc8  Gaze Tracking History for {user.Name}",
-            Font = new Font("Segoe UI", 14, FontStyle.Bold),
-            ForeColor = Color.White,
-            AutoSize = false, Size = new Size(560, 32),
-            Location = new Point(0, y),
-            BackColor = Color.Transparent,
-        });
-        y += 36;
-
-        // Current GazeProfile summary
-        var gp = user.GazeProfile ?? new GazeProfile();
-        scrollPanel.Controls.Add(new Label
-        {
-            Text = $"Current Profile:  Strokes={gp.Strokes_Score}  Rules={gp.Rules_Score}  " +
-                   $"Practice={gp.Practice_Score}  Quiz={gp.Quiz_Score}  " +
-                   $"Spelling={gp.Spelling_Score}  Competition={gp.Competition_Score}",
-            Font = new Font("Segoe UI", 9, FontStyle.Italic),
-            ForeColor = Color.FromArgb(140, 175, 225),
-            AutoSize = false, Size = new Size(560, 22),
-            Location = new Point(0, y),
-            BackColor = Color.Transparent,
-        });
-        y += 26;
-
-        // Trend indicators
-        string trendLine = "Trends: ";
-        foreach (var kvp in trends)
-        {
-            string arrow = kvp.Value > 0 ? "\u2191" : kvp.Value < 0 ? "\u2193" : "\u2192";
-            trendLine += $"{kvp.Key}{arrow}  ";
-        }
-        scrollPanel.Controls.Add(new Label
-        {
-            Text = trendLine,
-            Font = new Font("Segoe UI", 9, FontStyle.Bold),
-            ForeColor = Color.FromArgb(60, 210, 160),
-            AutoSize = false, Size = new Size(560, 20),
-            Location = new Point(0, y),
-            BackColor = Color.Transparent,
-        });
-        y += 28;
-
-        // Separator
-        scrollPanel.Controls.Add(new Panel
-        {
-            Size = new Size(560, 1), Location = new Point(0, y),
-            BackColor = Color.FromArgb(45, 65, 100)
-        });
-        y += 8;
-
-        if (sessions.Count == 0)
-        {
-            scrollPanel.Controls.Add(new Label
-            {
-                Text = "No gaze sessions recorded yet for this user.",
-                Font = new Font("Segoe UI", 11),
-                ForeColor = Color.FromArgb(160, 180, 210),
-                AutoSize = false, Size = new Size(560, 30),
-                Location = new Point(0, y),
-                BackColor = Color.Transparent,
-            });
-        }
-        else
-        {
-            for (int i = sessions.Count - 1; i >= 0; i--)
-            {
-                var s = sessions[i];
-                string when = s.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
-                string dur = TimeSpan.FromSeconds(s.DurationSeconds).ToString(@"mm\:ss");
-
-                // Session header
-                scrollPanel.Controls.Add(new Label
-                {
-                    Text = $"Session {i + 1}  \u2022  {when}  \u2022  {dur}  \u2022  {s.TotalFixations} fixations",
-                    Font = new Font("Segoe UI", 10, FontStyle.Bold),
-                    ForeColor = Color.White,
-                    AutoSize = false, Size = new Size(560, 24),
-                    Location = new Point(0, y),
-                    BackColor = Color.Transparent,
-                });
-                y += 24;
-
-                // Dominant + neglected
-                string info = $"Dominant: {s.DominantCategory}";
-                if (s.NeglectedCategories != null && s.NeglectedCategories.Count > 0)
-                    info += $"  |  Neglected: {string.Join(", ", s.NeglectedCategories)}";
-
-                scrollPanel.Controls.Add(new Label
-                {
-                    Text = info,
-                    Font = new Font("Segoe UI", 9),
-                    ForeColor = Color.FromArgb(130, 165, 215),
-                    AutoSize = false, Size = new Size(560, 20),
-                    Location = new Point(0, y),
-                    BackColor = Color.Transparent,
-                });
-                y += 20;
-
-                // Score bars
-                if (s.SessionScores != null)
-                {
-                    string scores = "Scores: ";
-                    foreach (var sc in s.SessionScores)
-                        scores += $"{sc.Key}={sc.Value}  ";
-
-                    scrollPanel.Controls.Add(new Label
-                    {
-                        Text = scores,
-                        Font = new Font("Segoe UI", 8),
-                        ForeColor = Color.FromArgb(100, 140, 195),
-                        AutoSize = false, Size = new Size(560, 18),
-                        Location = new Point(0, y),
-                        BackColor = Color.Transparent,
-                    });
-                    y += 18;
-                }
-
-                // Separator
-                scrollPanel.Controls.Add(new Panel
-                {
-                    Size = new Size(540, 1), Location = new Point(10, y + 4),
-                    BackColor = Color.FromArgb(35, 55, 85)
-                });
-                y += 14;
-            }
-        }
-
-        popup.ShowDialog(this);
-    }
-
-    public void removeTuioObject(TuioObject o)
-    {
-        // Reset marker 36 angle when it leaves the table
-        if (o.SymbolID == 36) _marker36LastAngle = float.NaN;
-    }
-
-    public void addTuioCursor(TuioCursor c)    { }
-    public void updateTuioCursor(TuioCursor c) { }
-    public void removeTuioCursor(TuioCursor c) { }
-    public void addTuioBlob(TuioBlob b)        { }
-    public void updateTuioBlob(TuioBlob b)     { }
-    public void removeTuioBlob(TuioBlob b)     { }
-    public void refresh(TuioTime t)            { }
 }

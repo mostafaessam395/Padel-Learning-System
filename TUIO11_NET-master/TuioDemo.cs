@@ -842,6 +842,7 @@ public class HomePage : Form, TuioListener
             ArrangeControls();
             this.Invalidate(true);
             this.Update();
+            StartDualLogin();
         };
 
         client = new TuioClient(port);
@@ -1099,34 +1100,49 @@ public class HomePage : Form, TuioListener
     {
         try
         {
-            using (BluetoothClient btClient = new BluetoothClient())
+            cachedUsers = LoadUsersFromJson();
+            var knownMacs = new HashSet<string>(
+                cachedUsers.Where(u => !string.IsNullOrEmpty(u.BluetoothId))
+                           .Select(u => NormalizeMac(u.BluetoothId)),
+                StringComparer.OrdinalIgnoreCase);
+
+            BtLog($"GetCurrentBluetoothId: scanning, knownMacs={string.Join(",", knownMacs)}");
+
+            // Step 1: paired/remembered devices (instant, no radio scan)
+            try
             {
-                var devices = btClient.DiscoverDevices();
-                cachedUsers = LoadUsersFromJson();
-
-                foreach (var device in devices)
+                using (var btClient = new BluetoothClient())
                 {
-                    string formattedMac = FormatBluetoothAddress(device.DeviceAddress.ToString());
-                    string normalizedMac = NormalizeMac(formattedMac);
-                    BtLog($"Scan found device={device.DeviceName} mac={formattedMac} normalized={normalizedMac}");
-
-                    // Match against users.json — role determines routing
-                    var matched = cachedUsers.FirstOrDefault(u =>
-                        !string.IsNullOrEmpty(u.BluetoothId) &&
-                        NormalizeMac(u.BluetoothId) == normalizedMac);
-
-                    if (matched != null)
+                    foreach (var device in btClient.PairedDevices)
                     {
-                        BtLog($"MAC matched user={matched.Name} role={matched.Role} active={matched.IsActive}");
-                        return formattedMac;
+                        string mac  = FormatBluetoothAddress(device.DeviceAddress.ToString());
+                        string norm = NormalizeMac(mac);
+                        BtLog($"  Paired: name={device.DeviceName} mac={mac}");
+                        if (knownMacs.Contains(norm)) { BtLog($"  -> MATCH paired"); return mac; }
                     }
                 }
             }
+            catch (Exception ex) { BtLog($"  PairedDevices error: {ex.Message}"); }
+
+            // Step 2: active radio scan for discoverable devices
+            try
+            {
+                using (var btClient = new BluetoothClient())
+                {
+                    foreach (var device in btClient.DiscoverDevices())
+                    {
+                        string mac  = FormatBluetoothAddress(device.DeviceAddress.ToString());
+                        string norm = NormalizeMac(mac);
+                        BtLog($"  Scan: name={device.DeviceName} mac={mac}");
+                        if (knownMacs.Contains(norm)) { BtLog($"  -> MATCH scan"); return mac; }
+                    }
+                }
+            }
+            catch (Exception ex) { BtLog($"  DiscoverDevices error: {ex.Message}"); }
+
+            BtLog("GetCurrentBluetoothId: no match found");
         }
-        catch (Exception ex)
-        {
-            BtLog($"GetCurrentBluetoothId ERROR: {ex.Message}");
-        }
+        catch (Exception ex) { BtLog($"GetCurrentBluetoothId ERROR: {ex.Message}"); }
 
         return "";
     }
@@ -1925,8 +1941,6 @@ public class HomePage : Form, TuioListener
             loadUsers:           () => LoadUsersFromJson(),
             scanBluetoothOnce:   () => GetCurrentBluetoothId(),
             adminBluetoothMac:   ADMIN_BLUETOOTH_MAC);
-
-        StartDualLogin();
     }
 
     private void ConnectFaceIDWithRetry()
@@ -2094,10 +2108,12 @@ public class HomePage : Form, TuioListener
 
     private void CompleteLoginAndNavigate(DualLoginManager.LoginResult result)
     {
-        if (pageOpen || _adminPageOpen) return;
+        BtLog($"CompleteLoginAndNavigate: pageOpen={pageOpen} adminPageOpen={_adminPageOpen} user={result?.User?.Name ?? "NULL"}");
+        if (pageOpen || _adminPageOpen) { BtLog("CompleteLoginAndNavigate: BLOCKED by guard"); return; }
         var user = result.User;
-        if (user == null) return;
+        if (user == null) { BtLog("CompleteLoginAndNavigate: user is NULL"); return; }
 
+        try {
         currentUser = user;
 
         _faceScanStatusLabel.Text = $"Welcome, {user.Name}!";
@@ -2130,6 +2146,8 @@ public class HomePage : Form, TuioListener
             NavigateByRole(user);
         };
         navTimer.Start();
+        BtLog($"CompleteLoginAndNavigate: navTimer started for {user.Name}");
+        } catch (Exception ex) { BtLog($"CompleteLoginAndNavigate EXCEPTION: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     private void NavigateByRole(UserData user)

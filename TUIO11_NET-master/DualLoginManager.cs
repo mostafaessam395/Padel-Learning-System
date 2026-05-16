@@ -177,32 +177,14 @@ public class DualLoginManager
 
                 if (!string.IsNullOrWhiteSpace(mac))
                 {
-                    string normalized      = NormalizeMac(mac);
-                    string adminNormalized = NormalizeMac(_adminBluetoothMac);
-
+                    string normalized = NormalizeMac(mac);
                     var users = _loadUsers();
 
-                    if (normalized == adminNormalized)
-                    {
-                        var adminUser = users.FirstOrDefault(u =>
-                            string.Equals(u.Role, "Admin", StringComparison.OrdinalIgnoreCase) && u.IsActive)
-                            ?? new UserData
-                            {
-                                UserId = "usr_admin",
-                                Name   = "Admin",
-                                Role   = "Admin",
-                                Level  = "Advanced",
-                                IsActive = true,
-                                BluetoothId = _adminBluetoothMac
-                            };
-                        return new LoginResult { Success = true, User = adminUser, Source = LoginSource.Bluetooth };
-                    }
-
+                    // Match purely by MAC + Role from users.json — no hardcoded admin MAC
                     var match = users.FirstOrDefault(u =>
                         u.IsActive
                         && !string.IsNullOrEmpty(u.BluetoothId)
-                        && NormalizeMac(u.BluetoothId) == normalized
-                        && !string.Equals(u.Role, "Admin", StringComparison.OrdinalIgnoreCase));
+                        && NormalizeMac(u.BluetoothId) == normalized);
 
                     if (match != null)
                         return new LoginResult { Success = true, User = match, Source = LoginSource.Bluetooth };

@@ -30,11 +30,13 @@ public class TestLevelsPage : Form, TuioListener
         Shown += (s, e) =>
         {
             if (_tuioClient != null) _tuioClient.addTuioListener(this);
+            GestureRouter.ClaimFocus(this);
             GestureRouter.OnGestureMarker += HandleGestureMarker;
         };
         FormClosed += (s, e) =>
         {
             GestureRouter.OnGestureMarker -= HandleGestureMarker;
+            GestureRouter.ReleaseFocus(this);
             if (_tuioClient != null) _tuioClient.removeTuioListener(this);
         };
     }
@@ -189,12 +191,11 @@ public class TestLevelsPage : Form, TuioListener
     {
         if (_pageOpen || IsDisposed) return;
         _pageOpen = true;
-        Console.WriteLine($"[TestLevels] Opening level={level}");
-
         var dummyUser = new UserData { Name = "Admin Test", Level = level,
             GazeProfile = new GazeProfile() };
         var page = new LearningPage(dummyUser, _tuioClient);
-        page.FormClosed += (s, e) => { _pageOpen = false; };
+        page.Shown      += (s, e) => GestureRouter.ClaimFocus(page);
+        page.FormClosed += (s, e) => { _pageOpen = false; GestureRouter.ClaimFocus(this); };
         page.Show();
     }
 
@@ -216,11 +217,15 @@ public class TestLevelsPage : Form, TuioListener
     private void HandleGestureMarker(int id)
     {
         if (!Visible || IsDisposed) return;
+        if (!GestureRouter.HasFocus(this)) return;
         BeginInvoke((MethodInvoker)(() => Dispatch(id)));
     }
 
     public void addTuioObject(TuioObject o)
-        => BeginInvoke((MethodInvoker)(() => Dispatch(o.SymbolID)));
+    {
+        if (!GestureRouter.HasFocus(this)) return;
+        BeginInvoke((MethodInvoker)(() => Dispatch(o.SymbolID)));
+    }
 
     public void updateTuioObject(TuioObject o) { }
     public void removeTuioObject(TuioObject o) { }

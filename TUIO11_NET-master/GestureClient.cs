@@ -19,6 +19,38 @@ public static class GestureRouter
     /// </summary>
     public static event Action<string, float> OnGestureRecognized;
 
+    // ── Active-page marker focus gate ─────────────────────────────────────
+    // Only the form that currently holds the focus token will process markers.
+    // Set to null to allow any subscriber (default / home page behaviour).
+    private static object _focusOwner = null;
+
+    /// <summary>
+    /// Claim exclusive marker focus. Call this when a page becomes active.
+    /// Pass the form instance as the owner token.
+    /// </summary>
+    public static void ClaimFocus(object owner)
+    {
+        _focusOwner = owner;
+    }
+
+    /// <summary>
+    /// Release marker focus. Call this when a page closes or yields to a child.
+    /// Pass the expected owner so stale releases are ignored.
+    /// </summary>
+    public static void ReleaseFocus(object owner)
+    {
+        if (_focusOwner == owner) _focusOwner = null;
+    }
+
+    /// <summary>
+    /// Returns true if the caller currently holds marker focus,
+    /// or if no owner has claimed focus (open / home-page mode).
+    /// </summary>
+    public static bool HasFocus(object caller)
+    {
+        return _focusOwner == null || _focusOwner == caller;
+    }
+
     public static void RouteGesture(int markerId)
     {
         OnGestureMarker?.Invoke(markerId);

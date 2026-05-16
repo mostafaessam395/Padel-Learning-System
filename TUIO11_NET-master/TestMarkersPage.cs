@@ -49,11 +49,13 @@ public class TestMarkersPage : Form, TuioListener
         Shown += (s, e) =>
         {
             if (_tuioClient != null) _tuioClient.addTuioListener(this);
+            GestureRouter.ClaimFocus(this);
             GestureRouter.OnGestureMarker += HandleGestureMarker;
         };
         FormClosed += (s, e) =>
         {
             GestureRouter.OnGestureMarker -= HandleGestureMarker;
+            GestureRouter.ReleaseFocus(this);
             if (_tuioClient != null) _tuioClient.removeTuioListener(this);
         };
     }
@@ -246,11 +248,15 @@ public class TestMarkersPage : Form, TuioListener
     private void HandleGestureMarker(int id)
     {
         if (!Visible || IsDisposed) return;
+        if (!GestureRouter.HasFocus(this)) return;
         BeginInvoke((MethodInvoker)(() => Dispatch(id)));
     }
 
     public void addTuioObject(TuioObject o)
-        => BeginInvoke((MethodInvoker)(() => Dispatch(o.SymbolID)));
+    {
+        if (!GestureRouter.HasFocus(this)) return;
+        BeginInvoke((MethodInvoker)(() => Dispatch(o.SymbolID)));
+    }
 
     public void updateTuioObject(TuioObject o) { }
     public void removeTuioObject(TuioObject o) { }

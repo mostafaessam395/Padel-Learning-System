@@ -52,6 +52,7 @@ public class AdminDashboardPage : Form, TuioListener
         this.Shown += (s, e) =>
         {
             if (_tuioClient != null) _tuioClient.addTuioListener(this);
+            GestureRouter.ClaimFocus(this);
             GestureRouter.OnGestureMarker += HandleGestureMarker;
             GestureRouter.OnGestureRecognized += HandleGestureName;
         };
@@ -59,6 +60,7 @@ public class AdminDashboardPage : Form, TuioListener
         {
             GestureRouter.OnGestureMarker -= HandleGestureMarker;
             GestureRouter.OnGestureRecognized -= HandleGestureName;
+            GestureRouter.ReleaseFocus(this);
             if (_tuioClient != null) _tuioClient.removeTuioListener(this);
         };
     }
@@ -346,12 +348,36 @@ public class AdminDashboardPage : Form, TuioListener
 
     // ── Actions ───────────────────────────────────────────────────────────
 
-    private void OpenContentManager() => new ContentManagerPage(_tuioClient).Show();
-    private void OpenTestLevels()     => new TestLevelsPage(_tuioClient).Show();
-    private void OpenTestMarkers()    => new TestMarkersPage(_tuioClient).Show();
-    private void OpenSystemStatus()   => new SystemStatusPage(
-        _btConnected, _tuioClient != null, _gestureRef, _faceRef, _gazeRef, _tuioClient).Show();
-    private void GoBack()             => this.Close();
+    private void OpenContentManager()
+    {
+        var page = new ContentManagerPage(_tuioClient);
+        page.Shown      += (s, e) => GestureRouter.ClaimFocus(page);
+        page.FormClosed += (s, e) => GestureRouter.ClaimFocus(this);
+        page.Show();
+    }
+    private void OpenTestLevels()
+    {
+        var page = new TestLevelsPage(_tuioClient);
+        page.Shown      += (s, e) => GestureRouter.ClaimFocus(page);
+        page.FormClosed += (s, e) => GestureRouter.ClaimFocus(this);
+        page.Show();
+    }
+    private void OpenTestMarkers()
+    {
+        var page = new TestMarkersPage(_tuioClient);
+        page.Shown      += (s, e) => GestureRouter.ClaimFocus(page);
+        page.FormClosed += (s, e) => GestureRouter.ClaimFocus(this);
+        page.Show();
+    }
+    private void OpenSystemStatus()
+    {
+        var page = new SystemStatusPage(
+            _btConnected, _tuioClient != null, _gestureRef, _faceRef, _gazeRef, _tuioClient);
+        page.Shown      += (s, e) => GestureRouter.ClaimFocus(page);
+        page.FormClosed += (s, e) => GestureRouter.ClaimFocus(this);
+        page.Show();
+    }
+    private void GoBack() => this.Close();
 
     // ── TUIO ──────────────────────────────────────────────────────────────
 
@@ -443,7 +469,10 @@ public class AdminDashboardPage : Form, TuioListener
     }
 
     public void addTuioObject(TuioObject o)
-        => this.BeginInvoke((MethodInvoker)(() => DispatchMarker(o.SymbolID)));
+    {
+        if (!GestureRouter.HasFocus(this)) return;
+        this.BeginInvoke((MethodInvoker)(() => DispatchMarker(o.SymbolID)));
+    }
 
     public void updateTuioObject(TuioObject o) { }
     public void removeTuioObject(TuioObject o) { }
