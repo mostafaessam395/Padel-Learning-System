@@ -103,9 +103,9 @@ public class ElegantCircularMenu : Panel
         new[] { 27, 28 }
     };
 
-    private const int InnerOuter = 112, InnerInner = 62;
-    private const int OuterOuter = 188, OuterInner = 122;
-    private const int CenterR = 23;
+    private const int InnerOuter = 78, InnerInner = 44;
+    private const int OuterOuter = 132, OuterInner = 86;
+    private const int CenterR = 18;
 
     private enum MenuState { Closed, Inner, Outer }
     private MenuState _state = MenuState.Closed;
@@ -124,20 +124,19 @@ public class ElegantCircularMenu : Panel
     public event Action<int> OnActionTriggered;
     private void applyTheme()
     {
+        // Keep the panel surface transparent in BOTH themes so it never paints
+        // a solid rectangle over the form's background — only the menu wedges
+        // and the centre disc should be visible.
+        this.BackColor = Color.Transparent;
+
         if (AppSettings.IsDarkMode)
         {
-            this.BackColor = Color.FromArgb(25, 25, 35);
-
-            // ألوان غامقة للمنيو
             InnerColors[0] = Color.FromArgb(80, 120, 200);
             InnerColors[1] = Color.FromArgb(60, 140, 200);
             InnerColors[2] = Color.FromArgb(90, 110, 180);
         }
         else
         {
-            this.BackColor = Color.Transparent;
-
-            // رجع الألوان الأصلية
             InnerColors[0] = Color.FromArgb(70, 110, 200);
             InnerColors[1] = Color.FromArgb(45, 150, 215);
             InnerColors[2] = Color.FromArgb(55, 125, 205);
@@ -156,7 +155,7 @@ public class ElegantCircularMenu : Panel
 
     public ElegantCircularMenu()
     {
-        this.Size = new Size(420, 420);
+        this.Size = new Size(300, 300);
         this.DoubleBuffered = true;
         this.BackColor = Color.Transparent;
         this.SetStyle(ControlStyles.SupportsTransparentBackColor, true);
@@ -858,8 +857,8 @@ public class HomePage : Form, TuioListener
         _bookTimer.Start();
 
         circMenu = new ElegantCircularMenu();
-        circMenu.Size = new Size(420, 420);
-        circMenu.Location = new Point(this.ClientSize.Width - 430, this.ClientSize.Height - 430);
+        circMenu.Size = new Size(300, 300);
+        circMenu.Location = new Point(this.ClientSize.Width - 320, this.ClientSize.Height - 320);
         circMenu.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         circMenu.OnActionTriggered += (markerID) => { };
 
@@ -1586,125 +1585,165 @@ public class HomePage : Form, TuioListener
             g.FillRectangle(overlayBrush, this.ClientRectangle);
         }
 
-        Draw3DBook(g);
+        Draw3DRacket(g);
 
         base.OnPaint(e);
     }
 
-    private void Draw3DBook(Graphics g)
+    /// <summary>
+    /// Spinning padel racket - the racket head rotates around the vertical axis
+    /// (cosine drives the perspective width) so we see the face → edge → back
+    /// face → edge → ... in a continuous twirl. Replaces the old 3D book.
+    /// </summary>
+    private void Draw3DRacket(Graphics g)
     {
         g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
 
-        int cx = this.ClientSize.Width - 90;
-        int cy = 195;
-        int bookW = 140;
-        int bookH = 200;
-        int spineW = 28;
-        int topH = 18;
+        // ── Geometry ────────────────────────────────────────────────────
+        int cx = this.ClientSize.Width - 110;     // centre X
+        int headCy = 150;                          // centre Y of head
+        int headW = 130;                           // max head width (face-on)
+        int headH = 165;                           // head height
+        int handleW = 22;                          // handle shaft width
+        int handleLen = 145;                       // handle length
+        int gripLen = 60;                          // grip wrap section
 
         double cosA = Math.Cos(_bookAngle);
-        int frontW = (int)(bookW * Math.Abs(cosA));
-        bool frontVisible = cosA >= 0;
+        int curHeadW = (int)(headW * Math.Abs(cosA));
+        bool faceVisible = cosA >= 0;
 
-        Color frontColor = Color.FromArgb(220, 60, 90, 160);
-        Color spineColor = Color.FromArgb(255, 35, 60, 120);
-        Color topColor = Color.FromArgb(200, 80, 115, 185);
-        Color pageColor = Color.FromArgb(245, 240, 225);
-        Color glowColor = Color.FromArgb(60, 140, 200, 255);
+        // ── Palette ─────────────────────────────────────────────────────
+        Color frameDark   = Color.FromArgb(255, 12, 22, 50);
+        Color frameLight  = Color.FromArgb(255, 60, 95, 180);
+        Color faceDark    = Color.FromArgb(220, 8, 14, 36);
+        Color stringColor = Color.FromArgb(200, 230, 240, 255);
+        Color logoColor   = Color.FromArgb(220, 0, 220, 180);
+        Color handleDark  = Color.FromArgb(255, 16, 16, 22);
+        Color gripWrap    = Color.FromArgb(255, 36, 36, 44);
+        Color glowColor   = Color.FromArgb(70, 0, 220, 180);
 
-        int left = cx - frontW;
-        int right = cx;
-        int top = cy;
-        int bot = cy + bookH;
-
-        Rectangle glowRect = new Rectangle(left - spineW - 20, top - 20, frontW + spineW + 40, bookH + 40);
-        using (GraphicsPath glowPath = new GraphicsPath())
+        // ── Outer glow halo ─────────────────────────────────────────────
+        Rectangle glowRect = new Rectangle(cx - headW / 2 - 24, headCy - headH / 2 - 24,
+                                           headW + 48, headH + 48);
+        using (GraphicsPath gp = new GraphicsPath())
         {
-            glowPath.AddEllipse(glowRect);
-            using (PathGradientBrush gb = new PathGradientBrush(glowPath))
+            gp.AddEllipse(glowRect);
+            using (PathGradientBrush pgb = new PathGradientBrush(gp))
             {
-                gb.CenterColor = glowColor;
-                gb.SurroundColors = new Color[] { Color.Transparent };
-                g.FillPath(gb, glowPath);
+                pgb.CenterColor = glowColor;
+                pgb.SurroundColors = new Color[] { Color.Transparent };
+                g.FillPath(pgb, gp);
             }
         }
 
-        Point[] spinePts = new Point[] {
-            new Point(left - spineW, top  + topH),
-            new Point(left,          top  + topH),
-            new Point(left,          bot),
-            new Point(left - spineW, bot)
-        };
-        using (SolidBrush sb = new SolidBrush(spineColor))
-            g.FillPolygon(sb, spinePts);
-        using (Pen p = new Pen(Color.FromArgb(100, 255, 255, 255), 1))
-            g.DrawPolygon(p, spinePts);
+        // ── Handle (drawn first so the head sits over the top of it) ───
+        int handleX = cx - handleW / 2;
+        int handleY = headCy + headH / 2 - 6;
 
-        Point[] topFace = new Point[] {
-            new Point(left - spineW, top + topH),
-            new Point(left,          top + topH),
-            new Point(right,         top),
-            new Point(left - spineW, top)
-        };
-        using (SolidBrush sb = new SolidBrush(topColor))
-            g.FillPolygon(sb, topFace);
-        using (Pen p = new Pen(Color.FromArgb(80, 255, 255, 255), 1))
-            g.DrawPolygon(p, topFace);
+        // Shaft with vertical gradient
+        Rectangle shaftRect = new Rectangle(handleX, handleY, handleW, handleLen - gripLen);
+        using (LinearGradientBrush lb = new LinearGradientBrush(
+            shaftRect, LightenColor(handleDark, 40), handleDark, LinearGradientMode.Horizontal))
+            g.FillRectangle(lb, shaftRect);
+        using (Pen p = new Pen(Color.FromArgb(80, 255, 255, 255), 1f))
+            g.DrawRectangle(p, shaftRect);
 
-        if (frontW < bookW - 5)
+        // Grip (wider rectangle with horizontal stripe wrap)
+        Rectangle gripRect = new Rectangle(handleX - 4, handleY + handleLen - gripLen,
+                                            handleW + 8, gripLen);
+        using (LinearGradientBrush lb = new LinearGradientBrush(
+            gripRect, LightenColor(gripWrap, 30), gripWrap, LinearGradientMode.Horizontal))
+            g.FillRectangle(lb, gripRect);
+        using (Pen sp = new Pen(Color.FromArgb(150, 0, 0, 0), 1f))
         {
-            Rectangle pages = new Rectangle(right, top + topH, 6, bookH - topH);
-            using (SolidBrush pb = new SolidBrush(pageColor))
-                g.FillRectangle(pb, pages);
+            for (int y = gripRect.Top + 5; y < gripRect.Bottom - 3; y += 5)
+                g.DrawLine(sp, gripRect.Left + 1, y, gripRect.Right - 1, y);
+        }
+        // End cap
+        Rectangle capRect = new Rectangle(gripRect.X - 2, gripRect.Bottom - 5,
+                                          gripRect.Width + 4, 7);
+        using (SolidBrush cb = new SolidBrush(Color.FromArgb(255, 8, 8, 12)))
+            g.FillRectangle(cb, capRect);
+
+        // Throat / yoke - the V where shaft meets head
+        Point[] throat = new Point[] {
+            new Point(handleX - 6,          handleY + 2),
+            new Point(handleX + handleW + 6, handleY + 2),
+            new Point(cx + handleW,          handleY - 14),
+            new Point(cx - handleW,          handleY - 14)
+        };
+        using (LinearGradientBrush lb = new LinearGradientBrush(
+            new Rectangle(handleX - 8, handleY - 16, handleW + 16, 18),
+            frameLight, frameDark, LinearGradientMode.Vertical))
+            g.FillPolygon(lb, throat);
+        using (Pen p = new Pen(Color.FromArgb(140, 255, 255, 255), 1f))
+            g.DrawPolygon(p, throat);
+
+        // ── Head: outer frame (rotating ellipse) ────────────────────────
+        Rectangle headRect = new Rectangle(cx - curHeadW / 2, headCy - headH / 2,
+                                            Math.Max(4, curHeadW), headH);
+
+        // Frame body
+        using (LinearGradientBrush lb = new LinearGradientBrush(
+            headRect, frameLight, frameDark, LinearGradientMode.Vertical))
+            g.FillEllipse(lb, headRect);
+
+        // Inner face cavity (where strings live)
+        int inset = Math.Max(6, curHeadW / 12);
+        Rectangle faceRect = new Rectangle(headRect.X + inset, headRect.Y + inset + 2,
+                                            Math.Max(2, headRect.Width - inset * 2),
+                                            headRect.Height - inset * 2 - 4);
+        using (SolidBrush sb = new SolidBrush(faceDark))
+            g.FillEllipse(sb, faceRect);
+
+        // String pattern (only if we're at least partly face-on)
+        if (faceVisible && curHeadW > 25 && faceRect.Width > 4)
+        {
+            using (GraphicsPath ePath = new GraphicsPath())
+            {
+                ePath.AddEllipse(faceRect);
+                Region oldClip = g.Clip;
+                g.SetClip(ePath);
+                using (Pen sp = new Pen(stringColor, 1.0f))
+                {
+                    int vGap = Math.Max(7, faceRect.Width / 11);
+                    for (int x = faceRect.Left + vGap; x < faceRect.Right; x += vGap)
+                        g.DrawLine(sp, x, faceRect.Top, x, faceRect.Bottom);
+                    int hGap = Math.Max(9, faceRect.Height / 10);
+                    for (int y = faceRect.Top + hGap; y < faceRect.Bottom; y += hGap)
+                        g.DrawLine(sp, faceRect.Left, y, faceRect.Right, y);
+                }
+                g.Clip = oldClip;
+            }
+
+            // Centre logo (teal dot) when the racket is mostly face-on
+            if (curHeadW > headW * 0.55)
+            {
+                int dotR = 7;
+                using (SolidBrush db = new SolidBrush(logoColor))
+                    g.FillEllipse(db, cx - dotR, headCy - dotR, dotR * 2, dotR * 2);
+                using (Pen dp = new Pen(Color.White, 1.5f))
+                    g.DrawEllipse(dp, cx - dotR, headCy - dotR, dotR * 2, dotR * 2);
+            }
         }
 
-        if (frontW > 3)
+        // Outer rim highlight
+        using (Pen rim = new Pen(Color.FromArgb(faceVisible ? 180 : 220, 255, 255, 255), 2.2f))
+            g.DrawEllipse(rim, headRect);
+
+        // Specular gloss on top of the frame
+        Rectangle glossRect = new Rectangle(headRect.X + 4, headRect.Y + 4,
+                                            Math.Max(3, headRect.Width - 8),
+                                            Math.Max(3, headRect.Height / 3));
+        using (GraphicsPath gp = new GraphicsPath())
         {
-            Rectangle front = new Rectangle(left, top + topH, frontW, bookH - topH);
-            Color cover = frontVisible ? frontColor : Color.FromArgb(180, 40, 65, 130);
-            using (LinearGradientBrush lb = new LinearGradientBrush(
-                front,
-                LightenColor(cover, 30),
-                cover,
-                LinearGradientMode.Horizontal))
+            gp.AddEllipse(glossRect);
+            using (PathGradientBrush pgb = new PathGradientBrush(gp))
             {
-                g.FillRectangle(lb, front);
-            }
-
-            using (Pen p = new Pen(Color.FromArgb(120, 255, 255, 255), 1.5f))
-                g.DrawRectangle(p, front);
-
-            if (frontVisible && frontW > 50)
-            {
-                g.Clip = new Region(front);
-                float textScale = (float)frontW / bookW;
-                using (Font titleFont = new Font("Segoe UI", (int)(11 * textScale + 1), FontStyle.Bold))
-                using (Font subFont = new Font("Segoe UI", (int)(7 * textScale + 1), FontStyle.Regular))
-                using (SolidBrush tb = new SolidBrush(Color.FromArgb(230, 255, 255, 255)))
-                {
-                    using (Pen lp = new Pen(Color.FromArgb(80, 255, 255, 255), 1))
-                    {
-                        g.DrawLine(lp, front.Left + 8, front.Top + 30, front.Right - 8, front.Top + 30);
-                        g.DrawLine(lp, front.Left + 8, front.Bottom - 30, front.Right - 8, front.Bottom - 30);
-                    }
-
-                    SizeF sz = g.MeasureString("Padel", titleFont);
-                    g.DrawString("Padel", titleFont, tb, front.Left + (front.Width - sz.Width) / 2, front.Top + front.Height / 2 - sz.Height);
-                    SizeF sz2 = g.MeasureString("Coach", subFont);
-                    g.DrawString("Coach", subFont, tb, front.Left + (front.Width - sz2.Width) / 2, front.Top + front.Height / 2 + 4);
-                }
-                g.ResetClip();
-            }
-
-            Rectangle glossRect = new Rectangle(front.Left + 4, front.Top + 4, Math.Max(1, front.Width / 3), Math.Max(1, front.Height / 3));
-            using (GraphicsPath gp = new GraphicsPath())
-            {
-                gp.AddRectangle(glossRect);
-                using (LinearGradientBrush gloss =
-                    new LinearGradientBrush(glossRect, Color.FromArgb(55, 255, 255, 255), Color.Transparent, 135f))
-                {
-                    g.FillPath(gloss, gp);
-                }
+                pgb.CenterColor    = Color.FromArgb(90, 255, 255, 255);
+                pgb.SurroundColors = new Color[] { Color.Transparent };
+                g.FillPath(pgb, gp);
             }
         }
     }
