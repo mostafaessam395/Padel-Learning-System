@@ -20,7 +20,7 @@ using TuioDemo;
 
 public static class AppSettings
 {
-    public static bool IsDarkMode = false;
+    public static bool IsDarkMode = true;
     public static bool IsMuted = false;
     public static bool IsSlowVoice = false;
 
@@ -708,7 +708,7 @@ public class RoundedShadowPanel : SmoothPanel
         else
         {
             string badge = "\u2713 explored";
-            using (Font badgeFont = new Font("Arial", 8.5f, FontStyle.Bold))
+            using (Font badgeFont = new Font("Segoe UI", 8.5f, FontStyle.Bold))
             {
                 SizeF textSize = g.MeasureString(badge, badgeFont);
                 float bx = rect.Right - textSize.Width - 14;
@@ -727,7 +727,7 @@ public class RoundedShadowPanel : SmoothPanel
     private void DrawAdaptiveRibbon(Graphics g, string text, Color bgColor, Color textColor,
                                      Rectangle panelRect, float yOffset)
     {
-        using (Font ribbonFont = new Font("Arial", 9f, FontStyle.Bold))
+        using (Font ribbonFont = new Font("Segoe UI", 9f, FontStyle.Bold))
         {
             SizeF textSize = g.MeasureString(text, ribbonFont);
             float rx = panelRect.Right - textSize.Width - 16;
@@ -1247,7 +1247,7 @@ public class HomePage : Form, TuioListener
 
         lblFooter = new Label();
         lblFooter.Text = "Scanning for player...";
-        lblFooter.Font = new Font("Arial", 13, FontStyle.Italic);
+        lblFooter.Font = new Font("Segoe UI", 13, FontStyle.Italic);
         lblFooter.ForeColor = Color.White;
         lblFooter.AutoSize = false;
         lblFooter.Size = new Size(500, 30);
@@ -1309,7 +1309,7 @@ public class HomePage : Form, TuioListener
         _faceScanStatusLabel = new Label
         {
             Text = "Scanning Face...",
-            Font = new Font("Arial", 18, FontStyle.Bold),
+            Font = new Font("Segoe UI", 18, FontStyle.Bold),
             ForeColor = Color.FromArgb(230, 240, 255),
             AutoSize = false,
             Size = new Size(260, 34),
@@ -1322,7 +1322,7 @@ public class HomePage : Form, TuioListener
         _faceScanSubLabel = new Label
         {
             Text = "Stand in front of the camera",
-            Font = new Font("Arial", 11, FontStyle.Italic),
+            Font = new Font("Segoe UI", 11, FontStyle.Italic),
             ForeColor = Color.FromArgb(160, 180, 210),
             AutoSize = false,
             Size = new Size(260, 24),
@@ -1371,8 +1371,8 @@ public class HomePage : Form, TuioListener
 
         Label lblMarker = new Label();
         lblMarker.Text = "Auto Detect";
-        lblMarker.Font = new Font("Arial", 10, FontStyle.Bold);
-        lblMarker.ForeColor = Color.FromArgb(80, 110, 140);
+        lblMarker.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
+        lblMarker.ForeColor = AppSettings.AccentText;
         lblMarker.AutoSize = false;
         lblMarker.Size = new Size(150, 22);
         lblMarker.Location = new Point(75, 32);
@@ -1380,8 +1380,8 @@ public class HomePage : Form, TuioListener
 
         Label lblCardTitle = new Label();
         lblCardTitle.Text = title;
-        lblCardTitle.Font = new Font("Arial", 20, FontStyle.Bold);
-        lblCardTitle.ForeColor = Color.FromArgb(15, 40, 65);
+        lblCardTitle.Font = new Font("Segoe UI", 22, FontStyle.Bold);
+        lblCardTitle.ForeColor = AppSettings.TitleText;
         lblCardTitle.AutoSize = false;
         lblCardTitle.Size = new Size(240, 40);
         lblCardTitle.Location = new Point(18, 76);
@@ -1389,8 +1389,8 @@ public class HomePage : Form, TuioListener
 
         Label lblDesc = new Label();
         lblDesc.Text = desc;
-        lblDesc.Font = new Font("Arial", 11, FontStyle.Regular);
-        lblDesc.ForeColor = Color.FromArgb(70, 90, 110);
+        lblDesc.Font = new Font("Segoe UI", 11.5f, FontStyle.Regular);
+        lblDesc.ForeColor = AppSettings.SubText;
         lblDesc.AutoSize = false;
         lblDesc.Size = new Size(250, 55);
         lblDesc.Location = new Point(18, 125);
@@ -1437,7 +1437,7 @@ public class HomePage : Form, TuioListener
 
             DrawMiniIcon(g, iconType, new Rectangle(12, 12, 22, 22));
 
-            using (Font f = new Font("Arial", 8, FontStyle.Bold))
+            using (Font f = new Font("Segoe UI", 8, FontStyle.Bold))
             using (SolidBrush whiteBrush = new SolidBrush(Color.White))
             {
                 SizeF sz = g.MeasureString(number, f);
@@ -1678,8 +1678,8 @@ public class HomePage : Form, TuioListener
             {
                 g.Clip = new Region(front);
                 float textScale = (float)frontW / bookW;
-                using (Font titleFont = new Font("Arial", (int)(11 * textScale + 1), FontStyle.Bold))
-                using (Font subFont = new Font("Arial", (int)(7 * textScale + 1), FontStyle.Regular))
+                using (Font titleFont = new Font("Segoe UI", (int)(11 * textScale + 1), FontStyle.Bold))
+                using (Font subFont = new Font("Segoe UI", (int)(7 * textScale + 1), FontStyle.Regular))
                 using (SolidBrush tb = new SolidBrush(Color.FromArgb(230, 255, 255, 255)))
                 {
                     using (Pen lp = new Pen(Color.FromArgb(80, 255, 255, 255), 1))
@@ -2304,7 +2304,7 @@ public static class NavHelper
 
         Label lblBack = new Label();
         lblBack.Text = canGoBack ? "\u2190  Back   [ Marker 20 ]" : "\u2302  Home Screen";
-        lblBack.Font = new Font("Arial", 9, FontStyle.Bold);
+        lblBack.Font = new Font("Segoe UI", 9, FontStyle.Bold);
         lblBack.ForeColor = canGoBack ? Color.FromArgb(215, 232, 255) : Color.FromArgb(155, 190, 240);
         lblBack.Size = new Size(184, 28);
         lblBack.Location = new Point(8, 4);
@@ -2315,7 +2315,7 @@ public static class NavHelper
         // Center title
         Label lblTitle = new Label();
         lblTitle.Text = pageTitle;
-        lblTitle.Font = new Font("Arial", 14, FontStyle.Bold);
+        lblTitle.Font = new Font("Segoe UI", 14, FontStyle.Bold);
         lblTitle.ForeColor = Color.White;
         lblTitle.Size = new Size(520, 36);
         lblTitle.TextAlign = ContentAlignment.MiddleCenter;
@@ -2336,7 +2336,7 @@ public static class NavHelper
 
         Label lblHint = new Label();
         lblHint.Text = "[ 20 ] \u2192 Go Back";
-        lblHint.Font = new Font("Arial", 9, FontStyle.Italic);
+        lblHint.Font = new Font("Segoe UI", 9, FontStyle.Italic);
         lblHint.ForeColor = Color.FromArgb(95, 148, 220);
         lblHint.Size = new Size(146, 24);
         lblHint.Location = new Point(8, 4);
@@ -2448,7 +2448,7 @@ public class LearningPage : Form, TuioListener
     {
         lblWelcomeUser = new Label();
         lblWelcomeUser.Text = "Welcome " + currentUser.Name;
-        lblWelcomeUser.Font = new Font("Arial", 14, FontStyle.Bold);
+        lblWelcomeUser.Font = new Font("Segoe UI", 14, FontStyle.Bold);
         lblWelcomeUser.ForeColor = Color.FromArgb(30, 70, 120);
         lblWelcomeUser.BackColor = Color.FromArgb(230, 240, 255);
         lblWelcomeUser.AutoSize = false;
@@ -2477,7 +2477,7 @@ public class LearningPage : Form, TuioListener
 
         this.Text = displayLevel + " Page";
         this.WindowState = FormWindowState.Maximized;
-        this.BackColor = Color.FromArgb(248, 251, 255);
+        this.BackColor = AppSettings.PageBg;
         this.StartPosition = FormStartPosition.CenterScreen;
         this.DoubleBuffered = true;
 
@@ -2584,29 +2584,29 @@ public class LearningPage : Form, TuioListener
 
     private void BuildPrimaryUI()
     {
-        this.BackColor = Color.FromArgb(236, 247, 255);
+        this.BackColor = AppSettings.PageBg;
 
-        headerPanel = CreateRoundedPanel(Color.FromArgb(250, 252, 255), 42);
+        headerPanel = CreateRoundedPanel(Color.FromArgb(235, 30, 42, 78), 42);
         headerPanel.Size = new Size(1220, 290);
-        headerPanel.BorderColor = Color.FromArgb(210, 230, 245);
+        headerPanel.BorderColor = Color.FromArgb(60, 0, 220, 180);
         headerPanel.BorderThickness = 1.8f;
-        headerPanel.ShadowColor = Color.FromArgb(38, 0, 0, 0);
+        headerPanel.ShadowColor = Color.FromArgb(80, 0, 0, 0);
         headerPanel.ShadowOffsetX = 5;
         headerPanel.ShadowOffsetY = 8;
 
         lblLevelBadge = new Label();
         lblLevelBadge.Text = "LEVEL 1  •  BEGINNER";
-        lblLevelBadge.Font = new Font("Arial", 12, FontStyle.Bold);
-        lblLevelBadge.ForeColor = Color.FromArgb(38, 105, 165);
-        lblLevelBadge.BackColor = Color.FromArgb(220, 239, 255);
+        lblLevelBadge.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+        lblLevelBadge.ForeColor = Color.White;
+        lblLevelBadge.BackColor = Color.FromArgb(220, 30, 80, 180);
         lblLevelBadge.AutoSize = false;
         lblLevelBadge.Size = new Size(220, 38);
         lblLevelBadge.TextAlign = ContentAlignment.MiddleCenter;
 
         lblTitle = new Label();
         lblTitle.Text = "Beginner Padel Training";
-        lblTitle.Font = new Font("Arial", 34, FontStyle.Bold);
-        lblTitle.ForeColor = Color.FromArgb(18, 56, 108);
+        lblTitle.Font = new Font("Segoe UI", 34, FontStyle.Bold);
+        lblTitle.ForeColor = Color.White;
         lblTitle.AutoSize = false;
         lblTitle.Size = new Size(720, 62);
         lblTitle.TextAlign = ContentAlignment.MiddleLeft;
@@ -2614,8 +2614,8 @@ public class LearningPage : Form, TuioListener
 
         lblSubtitle = new Label();
         lblSubtitle.Text = "Choose a beginner activity with your TUIO marker";
-        lblSubtitle.Font = new Font("Arial", 18, FontStyle.Regular);
-        lblSubtitle.ForeColor = Color.FromArgb(72, 98, 125);
+        lblSubtitle.Font = new Font("Segoe UI", 18, FontStyle.Regular);
+        lblSubtitle.ForeColor = AppSettings.SubText;
         lblSubtitle.AutoSize = false;
         lblSubtitle.Size = new Size(720, 36);
         lblSubtitle.TextAlign = ContentAlignment.MiddleLeft;
@@ -2623,8 +2623,8 @@ public class LearningPage : Form, TuioListener
 
         lblHint = new Label();
         lblHint.Text = "Start learning padel in a simple and interactive way!";
-        lblHint.Font = new Font("Arial", 14, FontStyle.Bold | FontStyle.Italic);
-        lblHint.ForeColor = Color.FromArgb(88, 120, 155);
+        lblHint.Font = new Font("Segoe UI", 14, FontStyle.Bold | FontStyle.Italic);
+        lblHint.ForeColor = AppSettings.AccentText;
         lblHint.AutoSize = false;
         lblHint.Size = new Size(560, 30);
         lblHint.TextAlign = ContentAlignment.MiddleLeft;
@@ -2715,12 +2715,12 @@ public class LearningPage : Form, TuioListener
 
         lblFooter = new Label();
         lblFooter.Text = "Touch your marker to start padel training!";
-        lblFooter.Font = new Font("Arial", 15, FontStyle.Bold);
-        lblFooter.ForeColor = Color.FromArgb(54, 92, 135);
+        lblFooter.Font = new Font("Segoe UI", 15, FontStyle.Bold);
+        lblFooter.ForeColor = Color.White;
         lblFooter.AutoSize = false;
         lblFooter.Size = new Size(640, 42);
         lblFooter.TextAlign = ContentAlignment.MiddleCenter;
-        lblFooter.BackColor = Color.FromArgb(228, 240, 255);
+        lblFooter.BackColor = Color.FromArgb(220, 30, 80, 180);
 
         this.Controls.Add(headerPanel);
         this.Controls.Add(cardVocabulary);
@@ -2736,15 +2736,15 @@ public class LearningPage : Form, TuioListener
     }
     private void BuildSecondaryUI()
     {
-        this.BackColor = Color.FromArgb(230, 248, 248);
+        this.BackColor = AppSettings.PageBg;
 
         headerPanel = new RoundedShadowPanel
         {
             CornerRadius = 36,
-            FillColor = Color.FromArgb(245, 254, 254),
-            BorderColor = Color.FromArgb(160, 210, 210),
+            FillColor = Color.FromArgb(235, 30, 42, 78),
+            BorderColor = Color.FromArgb(60, 0, 220, 180),
             BorderThickness = 1.8f,
-            ShadowColor = Color.FromArgb(35, 0, 80, 80),
+            ShadowColor = Color.FromArgb(80, 0, 0, 0),
             ShadowOffsetX = 5,
             ShadowOffsetY = 8,
             Size = new Size(1160, 200)
@@ -2752,17 +2752,17 @@ public class LearningPage : Form, TuioListener
 
         lblLevelBadge = new Label();
         lblLevelBadge.Text = "LEVEL 2  •  INTERMEDIATE";
-        lblLevelBadge.Font = new Font("Arial", 12, FontStyle.Bold);
-        lblLevelBadge.ForeColor = Color.FromArgb(22, 128, 128);
-        lblLevelBadge.BackColor = Color.FromArgb(210, 245, 245);
+        lblLevelBadge.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+        lblLevelBadge.ForeColor = Color.White;
+        lblLevelBadge.BackColor = Color.FromArgb(220, 0, 170, 145);
         lblLevelBadge.AutoSize = false;
         lblLevelBadge.Size = new Size(260, 38);
         lblLevelBadge.TextAlign = ContentAlignment.MiddleCenter;
 
         lblTitle = new Label();
         lblTitle.Text = "Intermediate Padel Training";
-        lblTitle.Font = new Font("Arial", 32, FontStyle.Bold);
-        lblTitle.ForeColor = Color.FromArgb(10, 90, 90);
+        lblTitle.Font = new Font("Segoe UI", 32, FontStyle.Bold);
+        lblTitle.ForeColor = Color.White;
         lblTitle.AutoSize = false;
         lblTitle.Size = new Size(820, 58);
         lblTitle.TextAlign = ContentAlignment.MiddleLeft;
@@ -2770,8 +2770,8 @@ public class LearningPage : Form, TuioListener
 
         lblSubtitle = new Label();
         lblSubtitle.Text = "Improve your padel skills with better control and movement";
-        lblSubtitle.Font = new Font("Arial", 16, FontStyle.Regular);
-        lblSubtitle.ForeColor = Color.FromArgb(55, 115, 115);
+        lblSubtitle.Font = new Font("Segoe UI", 16, FontStyle.Regular);
+        lblSubtitle.ForeColor = AppSettings.SubText;
         lblSubtitle.AutoSize = false;
         lblSubtitle.Size = new Size(820, 34);
         lblSubtitle.TextAlign = ContentAlignment.MiddleLeft;
@@ -2779,8 +2779,8 @@ public class LearningPage : Form, TuioListener
 
         lblHint = new Label();
         lblHint.Text = "Build stronger reactions, positioning, and shot accuracy!";
-        lblHint.Font = new Font("Arial", 13, FontStyle.Bold | FontStyle.Italic);
-        lblHint.ForeColor = Color.FromArgb(40, 140, 140);
+        lblHint.Font = new Font("Segoe UI", 13, FontStyle.Bold | FontStyle.Italic);
+        lblHint.ForeColor = AppSettings.AccentText;
         lblHint.AutoSize = false;
         lblHint.Size = new Size(820, 28);
         lblHint.TextAlign = ContentAlignment.MiddleLeft;
@@ -2847,12 +2847,12 @@ public class LearningPage : Form, TuioListener
 
         lblFooter = new Label();
         lblFooter.Text = "Place your marker to start intermediate training!";
-        lblFooter.Font = new Font("Arial", 13, FontStyle.Bold);
-        lblFooter.ForeColor = Color.FromArgb(80, 45, 160);
+        lblFooter.Font = new Font("Segoe UI", 13, FontStyle.Bold);
+        lblFooter.ForeColor = Color.White;
         lblFooter.AutoSize = false;
         lblFooter.Size = new Size(620, 38);
         lblFooter.TextAlign = ContentAlignment.MiddleCenter;
-        lblFooter.BackColor = Color.FromArgb(228, 220, 255);
+        lblFooter.BackColor = Color.FromArgb(220, 100, 60, 200);
 
         this.Controls.Add(headerPanel);
         this.Controls.Add(cardVocabulary);
@@ -2868,15 +2868,15 @@ public class LearningPage : Form, TuioListener
     }
     private void BuildHighSchoolUI()
     {
-        this.BackColor = Color.FromArgb(235, 232, 250);
+        this.BackColor = AppSettings.PageBg;
 
         headerPanel = new RoundedShadowPanel
         {
             CornerRadius = 40,
-            FillColor = Color.FromArgb(248, 246, 255),
-            BorderColor = Color.FromArgb(170, 155, 215),
+            FillColor = Color.FromArgb(235, 30, 42, 78),
+            BorderColor = Color.FromArgb(60, 0, 220, 180),
             BorderThickness = 1.8f,
-            ShadowColor = Color.FromArgb(40, 60, 0, 100),
+            ShadowColor = Color.FromArgb(80, 0, 0, 0),
             ShadowOffsetX = 6,
             ShadowOffsetY = 9,
             Size = new Size(1160, 200)
@@ -2884,17 +2884,17 @@ public class LearningPage : Form, TuioListener
 
         lblLevelBadge = new Label();
         lblLevelBadge.Text = "LEVEL 3  •  ADVANCED";
-        lblLevelBadge.Font = new Font("Arial", 12, FontStyle.Bold);
-        lblLevelBadge.ForeColor = Color.FromArgb(95, 55, 175);
-        lblLevelBadge.BackColor = Color.FromArgb(228, 220, 255);
+        lblLevelBadge.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+        lblLevelBadge.ForeColor = Color.White;
+        lblLevelBadge.BackColor = Color.FromArgb(220, 100, 60, 200);
         lblLevelBadge.AutoSize = false;
         lblLevelBadge.Size = new Size(240, 38);
         lblLevelBadge.TextAlign = ContentAlignment.MiddleCenter;
 
         lblTitle = new Label();
         lblTitle.Text = "Advanced Padel Training Area";
-        lblTitle.Font = new Font("Arial", 32, FontStyle.Bold);
-        lblTitle.ForeColor = Color.FromArgb(55, 28, 130);
+        lblTitle.Font = new Font("Segoe UI", 32, FontStyle.Bold);
+        lblTitle.ForeColor = Color.White;
         lblTitle.AutoSize = false;
         lblTitle.Size = new Size(820, 58);
         lblTitle.TextAlign = ContentAlignment.MiddleLeft;
@@ -2902,8 +2902,8 @@ public class LearningPage : Form, TuioListener
 
         lblSubtitle = new Label();
         lblSubtitle.Text = "Advanced control, speed, and competition";
-        lblSubtitle.Font = new Font("Arial", 15, FontStyle.Regular);
-        lblSubtitle.ForeColor = Color.FromArgb(100, 75, 170);
+        lblSubtitle.Font = new Font("Segoe UI", 15, FontStyle.Regular);
+        lblSubtitle.ForeColor = AppSettings.SubText;
         lblSubtitle.AutoSize = false;
         lblSubtitle.Size = new Size(820, 34);
         lblSubtitle.TextAlign = ContentAlignment.MiddleLeft;
@@ -2911,8 +2911,8 @@ public class LearningPage : Form, TuioListener
 
         lblHint = new Label();
         lblHint.Text = "Train like a competitive player and make better decisions";
-        lblHint.Font = new Font("Arial", 13, FontStyle.Bold | FontStyle.Italic);
-        lblHint.ForeColor = Color.FromArgb(130, 100, 200);
+        lblHint.Font = new Font("Segoe UI", 13, FontStyle.Bold | FontStyle.Italic);
+        lblHint.ForeColor = AppSettings.AccentText;
         lblHint.AutoSize = false;
         lblHint.Size = new Size(820, 28);
         lblHint.TextAlign = ContentAlignment.MiddleLeft;
@@ -2979,12 +2979,12 @@ public class LearningPage : Form, TuioListener
 
         lblFooter = new Label();
         lblFooter.Text = "Place your marker to start advanced training!";
-        lblFooter.Font = new Font("Arial", 13, FontStyle.Bold);
-        lblFooter.ForeColor = Color.FromArgb(80, 45, 160);
+        lblFooter.Font = new Font("Segoe UI", 13, FontStyle.Bold);
+        lblFooter.ForeColor = Color.White;
         lblFooter.AutoSize = false;
         lblFooter.Size = new Size(620, 38);
         lblFooter.TextAlign = ContentAlignment.MiddleCenter;
-        lblFooter.BackColor = Color.FromArgb(228, 220, 255);
+        lblFooter.BackColor = Color.FromArgb(220, 100, 60, 200);
 
         this.Controls.Add(headerPanel);
         this.Controls.Add(cardVocabulary);
@@ -3001,16 +3001,19 @@ public class LearningPage : Form, TuioListener
 
     private RoundedShadowPanel CreatePrimaryLessonCard(string marker, string title, string desc, Color backColor, Color accent, string iconType)
     {
+        // Dark-themed card: ignore passed backColor for the fill, use a dark
+        // glass tone instead. The accent colour still drives the ribbon, icon
+        // badge and CTA so each card keeps its identity.
         RoundedShadowPanel card = new RoundedShadowPanel
         {
-            CornerRadius = 34,
-            FillColor = backColor,
-            BorderColor = Color.FromArgb(240, 255, 255, 255),
-            BorderThickness = 1.5f,
-            ShadowColor = Color.FromArgb(30, 0, 0, 0),
+            CornerRadius = 28,
+            FillColor = Color.FromArgb(245, 30, 42, 78),
+            BorderColor = Color.FromArgb(80, accent),
+            BorderThickness = 1.6f,
+            ShadowColor = Color.FromArgb(110, 0, 0, 0),
             DrawGloss = true,
             ShadowOffsetX = 5,
-            ShadowOffsetY = 8,
+            ShadowOffsetY = 10,
             Size = new Size(340, 230)
         };
 
@@ -3024,8 +3027,8 @@ public class LearningPage : Form, TuioListener
 
         Label lblMarker = new Label();
         lblMarker.Text = marker;
-        lblMarker.Font = new Font("Arial", 10, FontStyle.Bold);
-        lblMarker.ForeColor = Color.FromArgb(55, 85, 115);
+        lblMarker.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
+        lblMarker.ForeColor = AppSettings.AccentText;
         lblMarker.AutoSize = false;
         lblMarker.Size = new Size(180, 22);
         lblMarker.Location = new Point(98, 36);
@@ -3033,8 +3036,8 @@ public class LearningPage : Form, TuioListener
 
         Label lblCardTitle = new Label();
         lblCardTitle.Text = title;
-        lblCardTitle.Font = new Font("Arial", 25, FontStyle.Bold);
-        lblCardTitle.ForeColor = Color.FromArgb(18, 46, 85);
+        lblCardTitle.Font = new Font("Segoe UI", 25, FontStyle.Bold);
+        lblCardTitle.ForeColor = Color.White;
         lblCardTitle.AutoSize = false;
         lblCardTitle.Size = new Size(260, 46);
         lblCardTitle.Location = new Point(22, 86);
@@ -3042,19 +3045,19 @@ public class LearningPage : Form, TuioListener
 
         Label lblDesc = new Label();
         lblDesc.Text = desc;
-        lblDesc.Font = new Font("Arial", 12, FontStyle.Regular);
-        lblDesc.ForeColor = Color.FromArgb(76, 96, 116);
+        lblDesc.Font = new Font("Segoe UI", 12, FontStyle.Regular);
+        lblDesc.ForeColor = AppSettings.SubText;
         lblDesc.AutoSize = false;
         lblDesc.Size = new Size(275, 65);
         lblDesc.Location = new Point(22, 140);
         lblDesc.BackColor = Color.Transparent;
 
         Label lblTap = new Label();
-        lblTap.Text = "Ready to play!";
-        lblTap.Font = new Font("Arial", 11, FontStyle.Bold);
+        lblTap.Text = "▶  Ready to play!";
+        lblTap.Font = new Font("Segoe UI", 11, FontStyle.Bold);
         lblTap.ForeColor = accent;
         lblTap.AutoSize = false;
-        lblTap.Size = new Size(140, 22);
+        lblTap.Size = new Size(180, 22);
         lblTap.Location = new Point(22, 212);
         lblTap.BackColor = Color.Transparent;
 
@@ -3102,8 +3105,8 @@ public class LearningPage : Form, TuioListener
             {
                 if (iconType == "vocabulary")
                 {
-                    g.DrawString("A", new Font("Arial", 12, FontStyle.Bold), brush, 14, 16);
-                    g.DrawString("B", new Font("Arial", 12, FontStyle.Bold), brush, 31, 25);
+                    g.DrawString("A", new Font("Segoe UI", 12, FontStyle.Bold), brush, 14, 16);
+                    g.DrawString("B", new Font("Segoe UI", 12, FontStyle.Bold), brush, 31, 25);
                     g.DrawArc(pen, 12, 13, 26, 20, 10, 320);
                 }
                 else if (iconType == "grammar")
@@ -3125,7 +3128,7 @@ public class LearningPage : Form, TuioListener
                 else if (iconType == "quiz")
                 {
                     g.DrawEllipse(pen, 14, 14, 22, 22);
-                    g.DrawString("?", new Font("Arial", 14, FontStyle.Bold), brush, 20, 15);
+                    g.DrawString("?", new Font("Segoe UI", 14, FontStyle.Bold), brush, 20, 15);
                 }
                 else if (iconType == "spelling")
                 {
@@ -3164,7 +3167,7 @@ public class LearningPage : Form, TuioListener
 
         Label lblMarker = new Label();
         lblMarker.Text = marker;
-        lblMarker.Font = new Font("Arial", 10, FontStyle.Bold);
+        lblMarker.Font = new Font("Segoe UI", 10, FontStyle.Bold);
         lblMarker.ForeColor = Color.FromArgb(30, 60, 90);
         lblMarker.AutoSize = false;
         lblMarker.Size = new Size(180, 22);
@@ -3173,7 +3176,7 @@ public class LearningPage : Form, TuioListener
 
         Label lblCardTitle = new Label();
         lblCardTitle.Text = title;
-        lblCardTitle.Font = new Font("Arial", 22, FontStyle.Bold);
+        lblCardTitle.Font = new Font("Segoe UI", 22, FontStyle.Bold);
         lblCardTitle.ForeColor = Color.FromArgb(15, 40, 65);
         lblCardTitle.AutoSize = false;
         lblCardTitle.Size = new Size(250, 40);
@@ -3182,8 +3185,8 @@ public class LearningPage : Form, TuioListener
 
         Label lblDesc = new Label();
         lblDesc.Text = desc;
-        lblDesc.Font = new Font("Arial", 11, FontStyle.Regular);
-        lblDesc.ForeColor = Color.FromArgb(70, 90, 110);
+        lblDesc.Font = new Font("Segoe UI", 11.5f, FontStyle.Regular);
+        lblDesc.ForeColor = AppSettings.SubText;
         lblDesc.AutoSize = false;
         lblDesc.Size = new Size(260, 50);
         lblDesc.Location = new Point(20, 122);
@@ -3236,8 +3239,8 @@ public class LearningPage : Form, TuioListener
                     Rectangle b = new Rectangle(25, 15, 10, 18);
                     g.DrawRectangle(pen, a);
                     g.DrawRectangle(pen, b);
-                    g.DrawString("A", new Font("Arial", 8, FontStyle.Bold), brush, 13, 18);
-                    g.DrawString("B", new Font("Arial", 8, FontStyle.Bold), brush, 27, 18);
+                    g.DrawString("A", new Font("Segoe UI", 8, FontStyle.Bold), brush, 13, 18);
+                    g.DrawString("B", new Font("Segoe UI", 8, FontStyle.Bold), brush, 27, 18);
                 }
                 else if (iconType == "grammar")
                 {
@@ -3259,7 +3262,7 @@ public class LearningPage : Form, TuioListener
                 {
                     // Question mark target circle
                     g.DrawEllipse(pen, 10, 12, 24, 24);
-                    g.DrawString("?", new Font("Arial", 13, FontStyle.Bold), brush, 17, 15);
+                    g.DrawString("?", new Font("Segoe UI", 13, FontStyle.Bold), brush, 17, 15);
                 }
                 else if (iconType == "spelling")
                 {
@@ -4561,7 +4564,7 @@ public class LessonPage : Form, TuioListener
 
         lblHeader = new Label();
         lblHeader.Text = title;
-        lblHeader.Font = new Font("Arial", 28, FontStyle.Bold);
+        lblHeader.Font = new Font("Segoe UI", 28, FontStyle.Bold);
         lblHeader.ForeColor = Color.FromArgb(95, 60, 20);
         lblHeader.AutoSize = false;
         lblHeader.Size = new Size(840, 50);
@@ -4583,7 +4586,7 @@ public class LessonPage : Form, TuioListener
 
         lblCounter = new Label();
         lblCounter.Text = "1 / 1";
-        lblCounter.Font = new Font("Arial", 12, FontStyle.Bold);
+        lblCounter.Font = new Font("Segoe UI", 12, FontStyle.Bold);
         lblCounter.ForeColor = Color.FromArgb(50, 90, 130);
         lblCounter.AutoSize = false;
         lblCounter.Size = new Size(100, 26);
@@ -4598,7 +4601,7 @@ public class LessonPage : Form, TuioListener
 
         lblWord = new Label();
         lblWord.Text = "SERVE";
-        lblWord.Font = new Font("Arial", 34, FontStyle.Bold);
+        lblWord.Font = new Font("Segoe UI", 34, FontStyle.Bold);
         lblWord.ForeColor = Color.FromArgb(35, 60, 95);
         lblWord.AutoSize = false;
         lblWord.Size = new Size(760, 58);
@@ -4607,7 +4610,7 @@ public class LessonPage : Form, TuioListener
 
         lblMeaning = new Label();
         lblMeaning.Text = "Starting shot in padel";
-        lblMeaning.Font = new Font("Arial", 18, FontStyle.Regular);
+        lblMeaning.Font = new Font("Segoe UI", 18, FontStyle.Regular);
         lblMeaning.ForeColor = Color.FromArgb(90, 110, 125);
         lblMeaning.AutoSize = false;
         lblMeaning.Size = new Size(780, 40);
@@ -4619,7 +4622,7 @@ public class LessonPage : Form, TuioListener
 
         lblExample = new Label();
         lblExample.Text = "Coach Tip: Serve must bounce in diagonal box.";
-        lblExample.Font = new Font("Arial", 16, FontStyle.Bold);
+        lblExample.Font = new Font("Segoe UI", 16, FontStyle.Bold);
         lblExample.ForeColor = Color.FromArgb(55, 90, 125);
         lblExample.AutoSize = false;
         lblExample.Size = new Size(660, 34);
@@ -4630,7 +4633,7 @@ public class LessonPage : Form, TuioListener
 
         lblTip = new Label();
         lblTip.Text = "Look at the image, read the padel term, then follow the coach instruction.";
-        lblTip.Font = new Font("Arial", 12, FontStyle.Italic);
+        lblTip.Font = new Font("Segoe UI", 12, FontStyle.Italic);
         lblTip.ForeColor = Color.FromArgb(110, 120, 130);
         lblTip.AutoSize = false;
         lblTip.Size = new Size(720, 28);
@@ -4650,7 +4653,7 @@ public class LessonPage : Form, TuioListener
 
         lblInstruction = new Label();
         lblInstruction.Text = "Rotate marker " + controlMarkerId + " slowly to change the padel term";
-        lblInstruction.Font = new Font("Arial", 14, FontStyle.Bold);
+        lblInstruction.Font = new Font("Segoe UI", 14, FontStyle.Bold);
         lblInstruction.ForeColor = Color.FromArgb(55, 90, 125);
         lblInstruction.AutoSize = false;
         lblInstruction.Size = new Size(650, 34);
@@ -4671,7 +4674,7 @@ public class LessonPage : Form, TuioListener
 
         lblHeader = new Label();
         lblHeader.Text = title;
-        lblHeader.Font = new Font("Arial", 30, FontStyle.Bold);
+        lblHeader.Font = new Font("Segoe UI", 30, FontStyle.Bold);
         lblHeader.ForeColor = Color.FromArgb(38, 86, 52);
         lblHeader.AutoSize = false;
         lblHeader.Size = new Size(860, 50);
@@ -4680,7 +4683,7 @@ public class LessonPage : Form, TuioListener
 
         Label lblSubHeader = new Label();
         lblSubHeader.Text = "Build the correct padel rule using the tiles";
-        lblSubHeader.Font = new Font("Arial", 13, FontStyle.Italic);
+        lblSubHeader.Font = new Font("Segoe UI", 13, FontStyle.Italic);
         lblSubHeader.ForeColor = Color.FromArgb(82, 115, 90);
         lblSubHeader.AutoSize = false;
         lblSubHeader.Size = new Size(720, 28);
@@ -4704,7 +4707,7 @@ public class LessonPage : Form, TuioListener
 
         lblCounter = new Label();
         lblCounter.Text = "1 / 1";
-        lblCounter.Font = new Font("Arial", 12, FontStyle.Bold);
+        lblCounter.Font = new Font("Segoe UI", 12, FontStyle.Bold);
         lblCounter.ForeColor = Color.FromArgb(50, 90, 130);
         lblCounter.AutoSize = false;
         lblCounter.Size = new Size(100, 26);
@@ -4714,7 +4717,7 @@ public class LessonPage : Form, TuioListener
 
         lblArrangeBadge = new Label();
         lblArrangeBadge.Text = "RULE BUILDER";
-        lblArrangeBadge.Font = new Font("Arial", 10, FontStyle.Bold);
+        lblArrangeBadge.Font = new Font("Segoe UI", 10, FontStyle.Bold);
         lblArrangeBadge.ForeColor = Color.FromArgb(52, 100, 68);
         lblArrangeBadge.BackColor = Color.FromArgb(228, 246, 233);
         lblArrangeBadge.AutoSize = false;
@@ -4723,7 +4726,7 @@ public class LessonPage : Form, TuioListener
 
         lblArrangeTitle = new Label();
         lblArrangeTitle.Text = "Arrange Padel Rule Tiles";
-        lblArrangeTitle.Font = new Font("Arial", 26, FontStyle.Bold);
+        lblArrangeTitle.Font = new Font("Segoe UI", 26, FontStyle.Bold);
         lblArrangeTitle.ForeColor = Color.FromArgb(34, 70, 48);
         lblArrangeTitle.AutoSize = false;
         lblArrangeTitle.Size = new Size(520, 44);
@@ -4743,7 +4746,7 @@ public class LessonPage : Form, TuioListener
 
         lblProgress = new Label();
         lblProgress.Text = "Padel Rule Builder";
-        lblProgress.Font = new Font("Arial", 12, FontStyle.Bold);
+        lblProgress.Font = new Font("Segoe UI", 12, FontStyle.Bold);
         lblProgress.ForeColor = Color.FromArgb(60, 95, 130);
         lblProgress.AutoSize = false;
         lblProgress.Size = new Size(210, 28);
@@ -4757,7 +4760,7 @@ public class LessonPage : Form, TuioListener
 
         lblCorrectSentenceTitle = new Label();
         lblCorrectSentenceTitle.Text = "Correct Padel Rule";
-        lblCorrectSentenceTitle.Font = new Font("Arial", 12, FontStyle.Bold);
+        lblCorrectSentenceTitle.Font = new Font("Segoe UI", 12, FontStyle.Bold);
         lblCorrectSentenceTitle.ForeColor = Color.FromArgb(56, 105, 72);
         lblCorrectSentenceTitle.AutoSize = false;
         lblCorrectSentenceTitle.Size = new Size(220, 24);
@@ -4766,7 +4769,7 @@ public class LessonPage : Form, TuioListener
 
         lblCorrectSentence = new Label();
         lblCorrectSentence.Text = "Serve must bounce in diagonal box.";
-        lblCorrectSentence.Font = new Font("Arial", 21, FontStyle.Bold);
+        lblCorrectSentence.Font = new Font("Segoe UI", 21, FontStyle.Bold);
         lblCorrectSentence.ForeColor = Color.FromArgb(30, 65, 45);
         lblCorrectSentence.AutoSize = false;
         lblCorrectSentence.Size = new Size(700, 42);
@@ -4781,7 +4784,7 @@ public class LessonPage : Form, TuioListener
 
         lblArrangeHintTitle = new Label();
         lblArrangeHintTitle.Text = "Coach Hint";
-        lblArrangeHintTitle.Font = new Font("Arial", 12, FontStyle.Bold);
+        lblArrangeHintTitle.Font = new Font("Segoe UI", 12, FontStyle.Bold);
         lblArrangeHintTitle.ForeColor = Color.FromArgb(150, 100, 30);
         lblArrangeHintTitle.AutoSize = false;
         lblArrangeHintTitle.Size = new Size(120, 22);
@@ -4790,7 +4793,7 @@ public class LessonPage : Form, TuioListener
 
         lblArrangeHint = new Label();
         lblArrangeHint.Text = "Start with the main action.";
-        lblArrangeHint.Font = new Font("Arial", 14, FontStyle.Regular);
+        lblArrangeHint.Font = new Font("Segoe UI", 14, FontStyle.Regular);
         lblArrangeHint.ForeColor = Color.FromArgb(120, 92, 40);
         lblArrangeHint.AutoSize = false;
         lblArrangeHint.Size = new Size(700, 32);
@@ -4805,7 +4808,7 @@ public class LessonPage : Form, TuioListener
 
         lblInstruction = new Label();
         lblInstruction.Text = "Rotate marker " + controlMarkerId + " to move between padel rule cards";
-        lblInstruction.Font = new Font("Arial", 14, FontStyle.Bold);
+        lblInstruction.Font = new Font("Segoe UI", 14, FontStyle.Bold);
         lblInstruction.ForeColor = Color.FromArgb(45, 85, 125);
         lblInstruction.AutoSize = false;
         lblInstruction.Size = new Size(780, 34);
@@ -4975,7 +4978,7 @@ public class LessonPage : Form, TuioListener
     {
         Label lbl = new Label();
         lbl.Text = "➜";
-        lbl.Font = new Font("Arial", 20, FontStyle.Bold);
+        lbl.Font = new Font("Segoe UI", 20, FontStyle.Bold);
         lbl.ForeColor = Color.FromArgb(96, 182, 120);
         lbl.AutoSize = false;
         lbl.Size = new Size(38, 72);
@@ -5019,7 +5022,7 @@ public class LessonPage : Form, TuioListener
 
         Label lbl = new Label();
         lbl.Text = text;
-        lbl.Font = new Font("Arial", fontSize, FontStyle.Bold);
+        lbl.Font = new Font("Segoe UI", fontSize, FontStyle.Bold);
         lbl.ForeColor = Color.FromArgb(35, 60, 85);
         lbl.AutoSize = false;
         lbl.Size = new Size(tileW - 16, tileH - 16);
@@ -5067,9 +5070,9 @@ public class LessonPage : Form, TuioListener
             picWord.Image = imageCache[finalImageName];
             picWord.Visible = true;
             // Reset fonts to originals
-            lblWord.Font = new Font("Arial", 34, FontStyle.Bold);
+            lblWord.Font = new Font("Segoe UI", 34, FontStyle.Bold);
             lblWord.Size = new Size(760, 58);
-            lblMeaning.Font = new Font("Arial", 18, FontStyle.Regular);
+            lblMeaning.Font = new Font("Segoe UI", 18, FontStyle.Regular);
             lblMeaning.Size = new Size(780, 40);
         }
         else
@@ -5077,10 +5080,10 @@ public class LessonPage : Form, TuioListener
             picWord.Image = null;
             picWord.Visible = false;
             // No image: shift content up to fill space
-            lblWord.Font = new Font("Arial", 48, FontStyle.Bold);
+            lblWord.Font = new Font("Segoe UI", 48, FontStyle.Bold);
             lblWord.Size = new Size(wordPanel.Width - 80, 80);
             lblWord.Location = new Point((wordPanel.Width - lblWord.Width) / 2, 100);
-            lblMeaning.Font = new Font("Arial", 22, FontStyle.Regular);
+            lblMeaning.Font = new Font("Segoe UI", 22, FontStyle.Regular);
             lblMeaning.Size = new Size(wordPanel.Width - 80, 50);
             lblMeaning.Location = new Point((wordPanel.Width - lblMeaning.Width) / 2, 210);
             examplePanel.Location = new Point((wordPanel.Width - examplePanel.Width) / 2, 300);
@@ -5137,9 +5140,9 @@ public class LessonPage : Form, TuioListener
         if (picWord != null && picWord.Visible)
         {
             // Reset fonts to originals then position
-            lblWord.Font = new Font("Arial", 34, FontStyle.Bold);
+            lblWord.Font = new Font("Segoe UI", 34, FontStyle.Bold);
             lblWord.Size = new Size(760, 58);
-            lblMeaning.Font = new Font("Arial", 18, FontStyle.Regular);
+            lblMeaning.Font = new Font("Segoe UI", 18, FontStyle.Regular);
             lblMeaning.Size = new Size(780, 40);
             picWord.Location = new Point((wordPanel.Width - picWord.Width) / 2, 50);
             lblWord.Location = new Point((wordPanel.Width - lblWord.Width) / 2, 310);
@@ -5150,10 +5153,10 @@ public class LessonPage : Form, TuioListener
         else
         {
             // Layout WITHOUT image — boost text size and bring up
-            lblWord.Font = new Font("Arial", 52, FontStyle.Bold);
+            lblWord.Font = new Font("Segoe UI", 52, FontStyle.Bold);
             lblWord.Size = new Size(wordPanel.Width - 60, 86);
             lblWord.Location = new Point((wordPanel.Width - lblWord.Width) / 2, 80);
-            lblMeaning.Font = new Font("Arial", 22, FontStyle.Regular);
+            lblMeaning.Font = new Font("Segoe UI", 22, FontStyle.Regular);
             lblMeaning.Size = new Size(wordPanel.Width - 60, 50);
             lblMeaning.Location = new Point((wordPanel.Width - lblMeaning.Width) / 2, 190);
             examplePanel.Location = new Point((wordPanel.Width - examplePanel.Width) / 2, 262);
@@ -5608,7 +5611,7 @@ public class QuizPage : Form, TuioListener
             };
             var lbl = new Label
             {
-                Font = new Font("Arial", 17, FontStyle.Bold),
+                Font = new Font("Segoe UI", 17, FontStyle.Bold),
                 ForeColor = Color.FromArgb(35, 60, 85),
                 TextAlign = ContentAlignment.MiddleCenter,
                 BackColor = Color.Transparent,
@@ -5787,7 +5790,7 @@ public class QuizPage : Form, TuioListener
         return new Label
         {
             Text = text,
-            Font = new Font("Arial", size, style),
+            Font = new Font("Segoe UI", size, style),
             ForeColor = color,
             AutoSize = true,
             BackColor = Color.Transparent
@@ -6045,7 +6048,7 @@ public class SpellingPage : Form, TuioListener
             };
             var lbl = new Label
             {
-                Font = new Font("Arial", 16, FontStyle.Bold),
+                Font = new Font("Segoe UI", 16, FontStyle.Bold),
                 ForeColor = Color.FromArgb(55, 30, 95),
                 TextAlign = ContentAlignment.MiddleCenter,
                 BackColor = Color.Transparent,
@@ -6220,7 +6223,7 @@ public class SpellingPage : Form, TuioListener
     }
 
     private static Label MakeLabel(string text, int size, FontStyle style, Color color)
-    { return new Label { Text = text, Font = new Font("Arial", size, style), ForeColor = color, AutoSize = true, BackColor = Color.Transparent }; }
+    { return new Label { Text = text, Font = new Font("Segoe UI", size, style), ForeColor = color, AutoSize = true, BackColor = Color.Transparent }; }
 
     private void LoadImg(string name)
     {
@@ -6378,8 +6381,8 @@ public class CelebrationForm : Form
 
         int cx = this.Width / 2, cy = this.Height / 2;
 
-        DrawCentred(g, line1, new Font("Arial", 52, FontStyle.Bold), Color.FromArgb(255, 230, 50), cx, cy - 60);
-        DrawCentred(g, line2, new Font("Arial", 36, FontStyle.Bold), Color.White, cx, cy + 20);
+        DrawCentred(g, line1, new Font("Segoe UI", 52, FontStyle.Bold), Color.FromArgb(255, 230, 50), cx, cy - 60);
+        DrawCentred(g, line2, new Font("Segoe UI", 36, FontStyle.Bold), Color.White, cx, cy + 20);
     }
 
     private void DrawCentred(Graphics g, string text, Font font, Color color, int cx, int y)
