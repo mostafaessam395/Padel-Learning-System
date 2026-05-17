@@ -1,0 +1,38 @@
+[
+  {
+    "Word": "SERVE",
+    "Meaning": "Starting shot in padel",
+    "Example": "Coach Tip: Serve must bounce in the diagonal box.",
+    "ImageName": "serve.png"
+  },
+  {
+    "Word": "FOREHAND",
+    "Meaning": "Basic attacking shot from the dominant side",
+    "Example": "Coach Tip: Use your forehand to control direction and power.",
+    "ImageName": "forehand.png"
+  },
+  {
+    "Word": "BACKHAND",
+    "Meaning": "Shot played from the opposite side of the body",
+    "Example": "Coach Tip: Keep your body balanced on the backhand.",
+    "ImageName": "backhand.png"
+  },
+  {
+    "Word": "VOLLEY",
+    "Meaning": "Shot played before the ball bounces",
+    "Example": "Coach Tip: Stay close to the net and keep the racket stable.",
+    "ImageName": "volley.png"
+  },
+  {
+    "Word": "COURT ZONES",
+    "Meaning": "Learn the main zones of the court",
+    "Example": "Coach Tip: Good positioning improves your next shot.",
+    "ImageName": "court_zones.png"
+  },
+  {
+    "Word": "SCORING",
+    "Meaning": "Basic point system in padel",
+    "Example": "Coach Tip: Learn how points move from 15 to game.",
+    "ImageName": "scoring.png"
+  }
+]
