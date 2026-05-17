@@ -170,6 +170,146 @@ namespace TuioDemo
         }
     }
 
+    /// <summary>
+    /// Self-contained animated particle-field overlay. Add to a form
+    /// as a Dock=Fill control, send to back, and it paints animated
+    /// floating dots / drifting gradient blobs above whatever's behind.
+    /// </summary>
+    public class AnimatedBackdrop : Control
+    {
+        private readonly System.Windows.Forms.Timer _t;
+        private float _phase;
+        private readonly Particle[] _parts;
+        private readonly Random _rnd = new Random(11);
+        private Color _gradTop = PadelTheme.BgDeep;
+        private Color _gradBot = PadelTheme.BgPanelAlt;
+        private Color _particleColor = Color.FromArgb(120, 180, 255);
+        private bool _drawGradient = false;
+        private int _blobCount = 3;
+
+        public Color GradientTop    { get { return _gradTop; } set { _gradTop = value; Invalidate(); } }
+        public Color GradientBottom { get { return _gradBot; } set { _gradBot = value; Invalidate(); } }
+        public Color ParticleColor  { get { return _particleColor; } set { _particleColor = value; Invalidate(); } }
+        /// <summary>If true, the backdrop also draws the diagonal gradient base.</summary>
+        public bool  DrawGradient   { get { return _drawGradient; } set { _drawGradient = value; Invalidate(); } }
+        /// <summary>Number of soft drifting blobs (0-5 reasonable).</summary>
+        public int   BlobCount      { get { return _blobCount; } set { _blobCount = Math.Max(0, Math.Min(8, value)); Invalidate(); } }
+
+        public AnimatedBackdrop(int particleCount = 55)
+        {
+            DoubleBuffered = true;
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw |
+                     ControlStyles.SupportsTransparentBackColor, true);
+            BackColor = Color.Transparent;
+            Dock = DockStyle.Fill;
+            _parts = new Particle[Math.Max(8, particleCount)];
+            for (int i = 0; i < _parts.Length; i++) _parts[i] = NewParticle(true);
+
+            _t = new System.Windows.Forms.Timer { Interval = 33 };
+            _t.Tick += (s, e) =>
+            {
+                _phase += 0.015f; if (_phase > 6.28f) _phase -= 6.28f;
+                for (int i = 0; i < _parts.Length; i++)
+                {
+                    var p = _parts[i];
+                    p.Y -= p.Vy;
+                    p.X += p.Vx + (float)Math.Sin((_phase + p.Seed) * 1.5) * 0.25f;
+                    p.LifeT += 1f / Math.Max(1, p.Life);
+                    if (p.Y + p.R < 0 || p.X < -10 || p.X > Width + 10 || p.LifeT >= 1f)
+                        _parts[i] = NewParticle(false);
+                    else
+                        _parts[i] = p;
+                }
+                Invalidate();
+            };
+            _t.Start();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { _t.Stop(); _t.Dispose(); }
+            base.Dispose(disposing);
+        }
+
+        private struct Particle
+        {
+            public float X, Y, Vx, Vy, R, Seed, LifeT;
+            public int Life;
+            public byte AlphaMax;
+        }
+
+        private Particle NewParticle(bool initial)
+        {
+            int w = Math.Max(1, Width), h = Math.Max(1, Height);
+            return new Particle
+            {
+                X = _rnd.Next(0, w),
+                Y = initial ? _rnd.Next(0, h) : h + _rnd.Next(0, 30),
+                Vx = (float)((_rnd.NextDouble() - 0.5) * 0.3),
+                Vy = 0.18f + (float)_rnd.NextDouble() * 0.7f,
+                R  = 1.4f + (float)_rnd.NextDouble() * 3.2f,
+                Seed = (float)_rnd.NextDouble() * 6.28f,
+                Life = _rnd.Next(280, 700),
+                LifeT = 0f,
+                AlphaMax = (byte)_rnd.Next(60, 200),
+            };
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e) { /* keep transparent */ }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            PadelTheme.HiQ(g);
+            var r = ClientRectangle;
+            if (r.Width <= 1 || r.Height <= 1) return;
+
+            if (_drawGradient)
+            {
+                using (var br = new LinearGradientBrush(r, _gradTop, _gradBot,
+                    45f + (float)Math.Sin(_phase) * 25f))
+                    g.FillRectangle(br, r);
+            }
+
+            // Slow drifting gradient blobs (atmospheric)
+            for (int b = 0; b < _blobCount; b++)
+            {
+                float t = _phase + b * 1.7f;
+                int cx = (int)(r.Width  * (0.20f + 0.60f * (0.5f + 0.5f * (float)Math.Sin(t * 0.7))));
+                int cy = (int)(r.Height * (0.20f + 0.60f * (0.5f + 0.5f * (float)Math.Cos(t * 0.5 + 1.3))));
+                int rad = (int)(Math.Min(r.Width, r.Height) * (0.18f + 0.06f * (float)Math.Sin(t * 1.1)));
+                Color centre = b % 2 == 0
+                    ? Color.FromArgb(60, _particleColor.R, _particleColor.G, _particleColor.B)
+                    : Color.FromArgb(45, PadelTheme.Accent.R, PadelTheme.Accent.G, PadelTheme.Accent.B);
+                using (var path = new GraphicsPath())
+                {
+                    path.AddEllipse(cx - rad, cy - rad, rad * 2, rad * 2);
+                    using (var pgb = new PathGradientBrush(path))
+                    {
+                        pgb.CenterColor    = centre;
+                        pgb.SurroundColors = new[] { Color.FromArgb(0, centre) };
+                        g.FillPath(pgb, path);
+                    }
+                }
+            }
+
+            // Particles
+            for (int i = 0; i < _parts.Length; i++)
+            {
+                var p = _parts[i];
+                float fade = (float)Math.Sin(Math.PI * p.LifeT);
+                int a = (int)(p.AlphaMax * Math.Max(0, fade));
+                if (a < 4) continue;
+                using (var br = new SolidBrush(Color.FromArgb(a, _particleColor)))
+                    g.FillEllipse(br, p.X - p.R, p.Y - p.R, p.R * 2, p.R * 2);
+                if (p.R > 2.4f)
+                    using (var br2 = new SolidBrush(Color.FromArgb(Math.Max(0, a / 4), 255, 255, 255)))
+                        g.FillEllipse(br2, p.X - p.R * 0.4f, p.Y - p.R * 0.4f, p.R * 0.8f, p.R * 0.8f);
+            }
+        }
+    }
+
     // Animated gradient bar with title + subtitle. Lives at the top of a page.
     public class GradientHeader : Control
     {

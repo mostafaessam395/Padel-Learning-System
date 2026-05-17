@@ -866,6 +866,20 @@ public class HomePage : Form, TuioListener
         this.Controls.Add(circMenu);
         circMenu.BringToFront();
 
+        // ── Dynamic animated backdrop (particles + drifting blobs) ──
+        // Lives behind every other control; form OnPaint still draws the
+        // bg image/gradient first, then this paints particles, then the
+        // hero / cards / HUDs render on top.
+        var backdrop = new AnimatedBackdrop(70)
+        {
+            DrawGradient   = false,
+            ParticleColor  = Color.FromArgb(140, 200, 255),
+            BlobCount      = 3,
+            Dock           = DockStyle.Fill,
+        };
+        this.Controls.Add(backdrop);
+        backdrop.SendToBack();
+
         this.FormClosed += delegate
         {
             _bookTimer.Stop();
@@ -1155,10 +1169,10 @@ public class HomePage : Form, TuioListener
 
         lblWelcome = new Label();
         lblWelcome.Text = "WELCOME TO";
-        lblWelcome.Font = new Font("Arial", 14, FontStyle.Bold);
+        lblWelcome.Font = new Font("Segoe UI", 14, FontStyle.Bold);
         lblWelcome.ForeColor = Color.White;
         lblWelcome.AutoSize = false;
-        lblWelcome.Size = new Size(250, 30);
+        lblWelcome.Size = new Size(280, 30);
         lblWelcome.TextAlign = ContentAlignment.MiddleCenter;
         lblWelcome.BackColor = Color.Transparent;
 
@@ -1167,16 +1181,16 @@ public class HomePage : Form, TuioListener
 
         lblTitle = new Label();
         lblTitle.Text = "Smart Padel Coaching System";
-        lblTitle.Font = new Font("Arial", 30, FontStyle.Bold);
+        lblTitle.Font = new Font("Segoe UI", 32, FontStyle.Bold);
         lblTitle.ForeColor = Color.FromArgb(15, 40, 75);
         lblTitle.AutoSize = false;
-        lblTitle.Size = new Size(960, 55);
+        lblTitle.Size = new Size(960, 60);
         lblTitle.TextAlign = ContentAlignment.MiddleCenter;
         lblTitle.BackColor = Color.Transparent;
 
         lblSubtitle = new Label();
         lblSubtitle.Text = "Interactive training experience for padel players across all skill levels";
-        lblSubtitle.Font = new Font("Arial", 15, FontStyle.Regular);
+        lblSubtitle.Font = new Font("Segoe UI", 15, FontStyle.Regular);
         lblSubtitle.ForeColor = Color.FromArgb(50, 75, 105);
         lblSubtitle.AutoSize = false;
         lblSubtitle.Size = new Size(960, 35);
@@ -1187,7 +1201,7 @@ public class HomePage : Form, TuioListener
         lblDescription.Text =
             "The system automatically detects the player and prepares the training journey.\n" +
             "Use Bluetooth login and interactive controls to start your padel coaching session.";
-        lblDescription.Font = new Font("Arial", 12, FontStyle.Regular);
+        lblDescription.Font = new Font("Segoe UI", 12, FontStyle.Regular);
         lblDescription.ForeColor = Color.FromArgb(70, 90, 110);
         lblDescription.AutoSize = false;
         lblDescription.Size = new Size(960, 60);
@@ -1200,7 +1214,7 @@ public class HomePage : Form, TuioListener
 
         lblInstruction = new Label();
         lblInstruction.Text = "Get ready... your padel level is being detected 🎾";
-        lblInstruction.Font = new Font("Arial", 13, FontStyle.Bold);
+        lblInstruction.Font = new Font("Segoe UI", 13, FontStyle.Bold);
         lblInstruction.ForeColor = Color.FromArgb(245, 248, 255);
         lblInstruction.AutoSize = false;
         lblInstruction.Size = new Size(900, 32);
@@ -2507,6 +2521,17 @@ public class LearningPage : Form, TuioListener
         // ── Initialize Gaze Tracking & Adaptive UI ──
         InitializeGazeTracking();
         ApplyAdaptiveLayout();
+
+        // ── Dynamic animated backdrop ──
+        var backdrop = new AnimatedBackdrop(55)
+        {
+            DrawGradient   = false,
+            ParticleColor  = Color.FromArgb(110, 165, 235),
+            BlobCount      = 2,
+            Dock           = DockStyle.Fill,
+        };
+        this.Controls.Add(backdrop);
+        backdrop.SendToBack();
     }
 
     private bool IsPrimary()
@@ -4234,6 +4259,17 @@ public class LessonPage : Form, TuioListener
 
         // Register shared adaptive UI helper (handles background + music)
         AdaptiveUIHelper.Register(this);
+
+        // ── Dynamic animated backdrop ──
+        var backdrop = new AnimatedBackdrop(50)
+        {
+            DrawGradient   = false,
+            ParticleColor  = Color.FromArgb(115, 180, 235),
+            BlobCount      = 2,
+            Dock           = DockStyle.Fill,
+        };
+        this.Controls.Add(backdrop);
+        backdrop.SendToBack();
     }
 
     /// <summary>
@@ -5503,6 +5539,17 @@ public class QuizPage : Form, TuioListener
         this.FormClosed += (s, e) => { GestureRouter.OnGestureMarker -= HandleGestureMarker; };
         this.Shown += (s, e) => { GestureRouter.OnGestureRecognized += HandleGestureName; };
         this.FormClosed += (s, e) => { GestureRouter.OnGestureRecognized -= HandleGestureName; };
+
+        // ── Dynamic animated backdrop ──
+        var backdrop = new AnimatedBackdrop(50)
+        {
+            DrawGradient   = false,
+            ParticleColor  = Color.FromArgb(110, 175, 235),
+            BlobCount      = 2,
+            Dock           = DockStyle.Fill,
+        };
+        this.Controls.Add(backdrop);
+        backdrop.SendToBack();
     }
 
     /// <summary>
@@ -5930,6 +5977,17 @@ public class SpellingPage : Form, TuioListener
         this.FormClosed += (s, e) => { GestureRouter.OnGestureMarker -= HandleGestureMarker; };
         this.Shown += (s, e) => { GestureRouter.OnGestureRecognized += HandleGestureName; };
         this.FormClosed += (s, e) => { GestureRouter.OnGestureRecognized -= HandleGestureName; };
+
+        // ── Dynamic animated backdrop ──
+        var backdrop = new AnimatedBackdrop(50)
+        {
+            DrawGradient   = false,
+            ParticleColor  = Color.FromArgb(110, 175, 235),
+            BlobCount      = 2,
+            Dock           = DockStyle.Fill,
+        };
+        this.Controls.Add(backdrop);
+        backdrop.SendToBack();
     }
 
     /// <summary>
