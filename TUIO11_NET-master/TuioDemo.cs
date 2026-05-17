@@ -103,9 +103,9 @@ public class ElegantCircularMenu : Panel
         new[] { 27, 28 }
     };
 
-    private const int InnerOuter = 78, InnerInner = 44;
-    private const int OuterOuter = 132, OuterInner = 86;
-    private const int CenterR = 18;
+    private const int InnerOuter = 56, InnerInner = 32;
+    private const int OuterOuter = 96, OuterInner = 62;
+    private const int CenterR = 14;
 
     private enum MenuState { Closed, Inner, Outer }
     private MenuState _state = MenuState.Closed;
@@ -155,7 +155,7 @@ public class ElegantCircularMenu : Panel
 
     public ElegantCircularMenu()
     {
-        this.Size = new Size(300, 300);
+        this.Size = new Size(220, 220);
         this.DoubleBuffered = true;
         this.BackColor = Color.Transparent;
         this.SetStyle(ControlStyles.SupportsTransparentBackColor, true);
@@ -857,8 +857,10 @@ public class HomePage : Form, TuioListener
         _bookTimer.Start();
 
         circMenu = new ElegantCircularMenu();
-        circMenu.Size = new Size(300, 300);
-        circMenu.Location = new Point(this.ClientSize.Width - 320, this.ClientSize.Height - 320);
+        circMenu.Size = new Size(220, 220);
+        // Tuck right against the bottom-right corner so the gear (centre)
+        // doesn't bleed over the bottom-right level card.
+        circMenu.Location = new Point(this.ClientSize.Width - 230, this.ClientSize.Height - 230);
         circMenu.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         circMenu.OnActionTriggered += (markerID) => { };
 
