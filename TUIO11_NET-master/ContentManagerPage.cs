@@ -88,20 +88,20 @@ public class ContentManagerPage : Form, TuioListener
     private CheckBox _cActive;
     private Button   _cBtnAdd, _cBtnSave, _cBtnDeact, _cBtnDel, _cBtnClr;
 
-    // ── colours ───────────────────────────────────────────────────────────
-    static readonly Color BG       = Color.FromArgb(18, 24, 42);
-    static readonly Color PANEL    = Color.FromArgb(24, 32, 56);
-    static readonly Color PANEL2   = Color.FromArgb(28, 38, 64);
+    // ── colours (aligned with PadelTheme) ─────────────────────────────────
+    static readonly Color BG       = PadelTheme.BgDeep;
+    static readonly Color PANEL    = PadelTheme.BgPanel;
+    static readonly Color PANEL2   = PadelTheme.BgPanelAlt;
     static readonly Color HEADER   = Color.FromArgb(10, 14, 30);
-    static readonly Color ACCENT   = Color.FromArgb(50, 115, 255);
-    static readonly Color ACCENT2  = Color.FromArgb(30, 160, 100);
-    static readonly Color TXT      = Color.FromArgb(215, 225, 245);
-    static readonly Color TXT_DIM  = Color.FromArgb(130, 150, 195);
-    static readonly Color FIELD_BG = Color.FromArgb(32, 42, 72);
+    static readonly Color ACCENT   = PadelTheme.Primary;
+    static readonly Color ACCENT2  = PadelTheme.Accent;
+    static readonly Color TXT      = PadelTheme.TextHi;
+    static readonly Color TXT_DIM  = PadelTheme.TextLo;
+    static readonly Color FIELD_BG = PadelTheme.BgElevated;
     static readonly Color ROW_ALT  = Color.FromArgb(22, 30, 52);
-    static readonly Color SEL_BG   = Color.FromArgb(50, 110, 220);
-    static readonly Color EDIT_HL  = Color.FromArgb(255, 200, 50);
-    static readonly Color EDIT_ACT = Color.FromArgb(50, 220, 120);
+    static readonly Color SEL_BG   = PadelTheme.PrimaryDeep;
+    static readonly Color EDIT_HL  = PadelTheme.Gold;
+    static readonly Color EDIT_ACT = PadelTheme.Ok;
 
     // ── unused field kept to avoid CS0414 ────────────────────────────────
     private Color _uBtnClr = Color.FromArgb(60, 68, 100);
@@ -144,13 +144,17 @@ public class ContentManagerPage : Form, TuioListener
     // ═════════════════════════════════════════════════════════════════════
     private void Build()
     {
-        var hdr = new Panel { Dock = DockStyle.Top, Height = 52, BackColor = HEADER };
-        hdr.Controls.Add(new Label {
-            Text = "Admin Management Panel",
-            Font = new Font("Segoe UI", 15, FontStyle.Bold),
-            ForeColor = Color.White, AutoSize = false,
-            Size = new Size(480, 36), Location = new Point(18, 8),
-            BackColor = Color.Transparent });
+        var hdr = new GradientHeader
+        {
+            Title        = "Content Management",
+            Subtitle     = "TUIO-driven user editing · training content library",
+            Icon         = "📋",
+            Height       = 118,
+            GradientFrom = PadelTheme.PrimaryDeep,
+            GradientTo   = PadelTheme.Accent,
+            AccentColor  = PadelTheme.Accent,
+            Dock         = DockStyle.Top,
+        };
         Controls.Add(hdr);
 
         var tabs = new TabControl {

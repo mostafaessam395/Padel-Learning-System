@@ -69,6 +69,7 @@
     <Compile Include="SystemStatusPage.cs" />
     <Compile Include="TestLevelsPage.cs" />
     <Compile Include="TestMarkersPage.cs" />
+    <Compile Include="PadelTheme.cs" />
     <Compile Include="OSC.NET\OSCBundle.cs" />
     <Compile Include="OSC.NET\OSCMessage.cs" />
     <Compile Include="OSC.NET\OSCPacket.cs" />

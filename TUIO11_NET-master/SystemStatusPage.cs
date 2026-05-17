@@ -6,8 +6,7 @@ using TUIO;
 using TuioDemo;
 
 /// <summary>
-/// Admin-only system status page.
-/// Shows Bluetooth, TUIO, YOLO, Face ID, Gaze, Gesture, and content JSON status.
+/// Admin-only system status page — animated pills, gradient header.
 /// Navigation: Marker 35 = Refresh, Marker 20 = Back.
 /// </summary>
 public class SystemStatusPage : Form, TuioListener
@@ -21,8 +20,10 @@ public class SystemStatusPage : Form, TuioListener
 
     private readonly ContentService _svc = new ContentService();
 
-    // Debounce: prevent repeated triggers while marker stays visible
     private bool _refreshCooldown = false;
+
+    private GradientHeader _header;
+    private Panel _scroller;
 
     public SystemStatusPage(
         bool btConnected,
@@ -40,10 +41,12 @@ public class SystemStatusPage : Form, TuioListener
         _tuioClient    = tuioClient;
 
         this.Text           = "System Status — Admin";
-        this.Size           = new Size(680, 580);
+        this.Size           = new Size(820, 720);
         this.StartPosition  = FormStartPosition.CenterScreen;
         this.DoubleBuffered = true;
-        this.BackColor      = Color.FromArgb(14, 22, 44);
+        this.BackColor      = PadelTheme.BgDeep;
+        this.SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                      ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
 
         BuildUI();
 
@@ -61,75 +64,158 @@ public class SystemStatusPage : Form, TuioListener
         };
     }
 
+    protected override void OnPaintBackground(PaintEventArgs e)
+    {
+        PadelTheme.PaintAppBackdrop(this, e);
+    }
+
     private void BuildUI()
     {
-        var lbl = new Label
+        this.Controls.Clear();
+
+        _header = new GradientHeader
         {
-            Text      = "📊  System Status",
-            Font      = new Font("Segoe UI", 20, FontStyle.Bold),
-            ForeColor = Color.White,
-            AutoSize  = true,
-            Location  = new Point(24, 18),
-            BackColor = Color.Transparent,
+            Title        = "System Status",
+            Subtitle     = "Live snapshot of all subsystems · Marker 35 to refresh · Marker 20 to go back",
+            Icon         = "📊",
+            Height       = 118,
+            GradientFrom = PadelTheme.PrimaryDeep,
+            GradientTo   = PadelTheme.Hot,
+            AccentColor  = PadelTheme.Accent,
+            Dock         = DockStyle.Top,
         };
-        this.Controls.Add(lbl);
+        this.Controls.Add(_header);
 
-        var sub = new Label
+        _scroller = new Panel
         {
-            Text      = "Live status of all system components",
-            Font      = new Font("Segoe UI", 10, FontStyle.Italic),
-            ForeColor = Color.FromArgb(130, 160, 210),
-            AutoSize  = true,
-            Location  = new Point(24, 54),
+            Dock      = DockStyle.Fill,
+            AutoScroll = true,
             BackColor = Color.Transparent,
+            Padding   = new Padding(28, 22, 28, 24),
         };
-        this.Controls.Add(sub);
+        this.Controls.Add(_scroller);
+        _scroller.BringToFront();
 
-        int y = 96;
-
-        // Content JSON
         var items = _svc.LoadAll();
         int activeCount = 0;
         foreach (var i in items) if (i.IsActive) activeCount++;
-
         string jsonPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "padel_content.json");
         bool jsonExists = File.Exists(jsonPath);
 
-        AddRow(ref y, "Bluetooth",              _btConnected,                  _btConnected ? "Admin device detected" : "Not connected");
-        AddRow(ref y, "Admin Detected",          _btConnected,                  _btConnected ? "E8:3A:12:40:1A:70 ✔" : "Not detected");
-        AddRow(ref y, "TUIO Server",             _tuioConnected,                _tuioConnected ? "Connected on port 3333" : "Not connected");
-        AddRow(ref y, "YOLO Server",             false,                         "Check localhost:5003 manually");
-        AddRow(ref y, "Face Recognition",        _faceRef?.IsConnected ?? false, _faceRef?.IsConnected == true ? "Connected on port 5001" : "Not connected");
-        AddRow(ref y, "Gaze Tracking",           _gazeRef?.IsConnected ?? false, _gazeRef?.IsConnected == true ? "Connected on port 5002" : "Not connected");
-        AddRow(ref y, "Gesture Tracking",        _gestureRef?.IsConnected ?? false, _gestureRef?.IsConnected == true ? "Connected on port 5000" : "Not connected");
-        AddRow(ref y, "Content JSON",            jsonExists,                    jsonExists ? $"{items.Count} items total" : "File missing — will be created on first use");
-        AddRow(ref y, "Active Content Items",    activeCount > 0,               $"{activeCount} active items");
+        int y = 0;
+        AddDivider(ref y, "Connectivity");
+        AddPill(ref y, "Bluetooth",         _btConnected,                       _btConnected ? "Admin device detected" : "Not connected");
+        AddPill(ref y, "Admin Device",       _btConnected,                      _btConnected ? "E8:3A:12:40:1A:70 ✔" : "Not detected");
+        AddPill(ref y, "TUIO Server",        _tuioConnected,                    _tuioConnected ? "Connected · port 3333" : "Not connected");
 
-        y += 12;
+        y += 10;
+        AddDivider(ref y, "AI Services");
+        AddPill(ref y, "YOLO Tracking",      false,                             "Verify localhost:5003 manually");
+        AddPill(ref y, "Face Recognition",   _faceRef != null && _faceRef.IsConnected,    _faceRef != null && _faceRef.IsConnected    ? "Connected · port 5001" : "Not connected");
+        AddPill(ref y, "Gaze Tracking",      _gazeRef != null && _gazeRef.IsConnected,    _gazeRef != null && _gazeRef.IsConnected    ? "Connected · port 5002" : "Not connected");
+        AddPill(ref y, "Gesture Tracking",   _gestureRef != null && _gestureRef.IsConnected, _gestureRef != null && _gestureRef.IsConnected ? "Connected · port 5000" : "Not connected");
 
-        // Marker instructions — compact, fits within form
-        this.Controls.Add(new Label {
-            Text      = "▶  Marker 35 : Refresh Status",
-            Font      = new Font("Segoe UI", 10, FontStyle.Bold),
-            ForeColor = Color.FromArgb(55, 125, 255),
-            AutoSize  = false, Size = new Size(420, 24),
-            Location  = new Point(24, y),
+        y += 10;
+        AddDivider(ref y, "Content");
+        AddPill(ref y, "Padel content JSON", jsonExists,                        jsonExists ? (items.Count + " items total") : "File missing — will be created on first use");
+        AddPill(ref y, "Active items",       activeCount > 0,                   activeCount + " active drills/tactics");
+
+        y += 18;
+
+        // Action hint cards
+        var refreshCard = new GlassCard
+        {
+            AccentTop = PadelTheme.Primary,
+            AccentBot = PadelTheme.Accent,
+            Size      = new Size(360, 80),
+            Location  = new Point(0, y),
+            Badge     = "Marker 35",
+        };
+        AddCardLabels(refreshCard, "🔄", "Refresh status", "Re-poll all subsystems live");
+        _scroller.Controls.Add(refreshCard);
+
+        var backCard = new GlassCard
+        {
+            AccentTop = PadelTheme.HotDeep,
+            AccentBot = PadelTheme.Hot,
+            Size      = new Size(360, 80),
+            Location  = new Point(380, y),
+            Badge     = "Marker 20",
+        };
+        AddCardLabels(backCard, "◀", "Back to admin", "Return to the admin dashboard");
+        _scroller.Controls.Add(backCard);
+    }
+
+    private void AddDivider(ref int y, string text)
+    {
+        var d = new SectionDivider
+        {
+            Text     = text,
+            Size     = new Size(_scroller.ClientSize.Width - 56, 26),
+            Location = new Point(0, y),
+            AccentColor = PadelTheme.Accent,
+            Anchor   = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+        };
+        _scroller.Controls.Add(d);
+        y += 32;
+    }
+
+    private void AddPill(ref int y, string label, bool ok, string detail)
+    {
+        var pill = new StatusPill
+        {
+            Label     = label,
+            Value     = (ok ? "● " : "○ ") + detail,
+            PillColor = ok ? PadelTheme.Ok : PadelTheme.Err,
+            Pulse     = ok,
+            Size      = new Size(_scroller.ClientSize.Width - 56, 46),
+            Location  = new Point(0, y),
+            Anchor    = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+        };
+        _scroller.Controls.Add(pill);
+        y += 52;
+    }
+
+    private void AddCardLabels(GlassCard card, string icon, string title, string sub)
+    {
+        var lblIcon = new Label
+        {
+            Text      = icon,
+            Font      = new Font(PadelTheme.DisplayFamily, 22, FontStyle.Bold),
+            ForeColor = Color.White,
             BackColor = Color.Transparent,
-            TextAlign = ContentAlignment.MiddleLeft });
+            AutoSize  = false,
+            Size      = new Size(48, 60),
+            Location  = new Point(22, 10),
+            TextAlign = ContentAlignment.MiddleCenter,
+        };
+        card.Controls.Add(lblIcon);
 
-        this.Controls.Add(new Label {
-            Text      = "◀  Marker 20 : Back to Admin Dashboard",
-            Font      = new Font("Segoe UI", 10, FontStyle.Bold),
-            ForeColor = Color.FromArgb(190, 55, 75),
-            AutoSize  = false, Size = new Size(420, 24),
-            Location  = new Point(24, y + 28),
+        var lblTitle = new Label
+        {
+            Text      = title,
+            Font      = new Font(PadelTheme.DisplayFamily, 13, FontStyle.Bold),
+            ForeColor = Color.White,
             BackColor = Color.Transparent,
-            TextAlign = ContentAlignment.MiddleLeft });
+            AutoSize  = false,
+            Size      = new Size(280, 22),
+            Location  = new Point(74, 14),
+            TextAlign = ContentAlignment.MiddleLeft,
+        };
+        card.Controls.Add(lblTitle);
 
-        // Ensure form is tall enough to show both instructions
-        int needed = y + 28 + 24 + 16;
-        if (this.ClientSize.Height < needed)
-            this.ClientSize = new Size(this.ClientSize.Width, needed);
+        var lblSub = new Label
+        {
+            Text      = sub,
+            Font      = new Font(PadelTheme.TextFamily, 9.5f, FontStyle.Regular),
+            ForeColor = PadelTheme.TextMid,
+            BackColor = Color.Transparent,
+            AutoSize  = false,
+            Size      = new Size(280, 36),
+            Location  = new Point(74, 38),
+            TextAlign = ContentAlignment.TopLeft,
+        };
+        card.Controls.Add(lblSub);
     }
 
     // ── Marker / Gesture handling ─────────────────────────────────────────
@@ -155,10 +241,8 @@ public class SystemStatusPage : Form, TuioListener
             if (_refreshCooldown) return;
             _refreshCooldown = true;
             Console.WriteLine("[SystemStatus] Marker 35 → Refresh");
-            Controls.Clear();
             BuildUI();
 
-            // Reset cooldown after 2 seconds
             var t = new System.Windows.Forms.Timer { Interval = 2000 };
             t.Tick += (s, e) => { t.Stop(); t.Dispose(); _refreshCooldown = false; };
             t.Start();
@@ -180,53 +264,4 @@ public class SystemStatusPage : Form, TuioListener
     public void updateTuioBlob(TuioBlob b)     { }
     public void removeTuioBlob(TuioBlob b)     { }
     public void refresh(TuioTime t)            { }
-
-    private void AddRow(ref int y, string label, bool ok, string detail)
-    {
-        var lblName = new Label
-        {
-            Text      = label,
-            Font      = new Font("Segoe UI", 10, FontStyle.Bold),
-            ForeColor = Color.FromArgb(190, 205, 230),
-            AutoSize  = false,
-            Size      = new Size(200, 30),
-            Location  = new Point(24, y),
-            BackColor = Color.Transparent,
-            TextAlign = ContentAlignment.MiddleLeft,
-        };
-
-        var lblStatus = new Label
-        {
-            Text      = ok ? "● OK" : "● Offline",
-            Font      = new Font("Segoe UI", 10, FontStyle.Bold),
-            ForeColor = ok ? Color.FromArgb(60, 210, 100) : Color.FromArgb(220, 80, 60),
-            AutoSize  = false,
-            Size      = new Size(90, 30),
-            Location  = new Point(230, y),
-            BackColor = Color.Transparent,
-            TextAlign = ContentAlignment.MiddleLeft,
-        };
-
-        var lblDetail = new Label
-        {
-            Text      = detail,
-            Font      = new Font("Segoe UI", 9, FontStyle.Italic),
-            ForeColor = Color.FromArgb(130, 155, 195),
-            AutoSize  = false,
-            Size      = new Size(320, 30),
-            Location  = new Point(330, y),
-            BackColor = Color.Transparent,
-            TextAlign = ContentAlignment.MiddleLeft,
-        };
-
-        this.Controls.Add(lblName);
-        this.Controls.Add(lblStatus);
-        this.Controls.Add(lblDetail);
-
-        // Separator line
-        var sep = new Panel { Size = new Size(620, 1), Location = new Point(24, y + 32), BackColor = Color.FromArgb(35, 50, 80) };
-        this.Controls.Add(sep);
-
-        y += 42;
-    }
 }

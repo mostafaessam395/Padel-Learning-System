@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -8,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using Newtonsoft.Json.Linq;
 using TUIO;
+using TuioDemo;
 
 /// <summary>
 /// AI Vision Coach Page — full-screen responsive dashboard layout.
@@ -122,18 +124,18 @@ public class AIVisionCoachPage : Form, TuioListener
         string[] activities = ActivitiesForLevel(_level);
 
         // Deselect current
-        _activityCards[_activityIndex].BackColor = Color.FromArgb(225, 235, 250);
+        _activityCards[_activityIndex].BackColor = Color.FromArgb(34, 46, 86);
         var oldLbl = _activityCards[_activityIndex].Controls.OfType<Label>().FirstOrDefault();
-        if (oldLbl != null) { oldLbl.ForeColor = Color.FromArgb(15, 48, 100); oldLbl.Font = new Font("Segoe UI", 10, FontStyle.Regular); }
+        if (oldLbl != null) { oldLbl.ForeColor = PadelTheme.TextMid; oldLbl.Font = new Font(PadelTheme.TextFamily, 10.5f, FontStyle.Regular); }
 
         // Move
         _activityIndex = (_activityIndex + direction + activities.Length) % activities.Length;
         _activity = activities[_activityIndex];
 
         // Highlight new
-        _activityCards[_activityIndex].BackColor = Color.FromArgb(30, 80, 180);
+        _activityCards[_activityIndex].BackColor = Color.FromArgb(40, 110, 210);
         var newLbl = _activityCards[_activityIndex].Controls.OfType<Label>().FirstOrDefault();
-        if (newLbl != null) { newLbl.ForeColor = Color.White; newLbl.Font = new Font("Segoe UI", 10, FontStyle.Bold); }
+        if (newLbl != null) { newLbl.ForeColor = Color.White; newLbl.Font = new Font(PadelTheme.TextFamily, 10.5f, FontStyle.Bold); }
 
         Console.WriteLine($"[AIVisionCoach] Activity selected: {_activity}");
     }
@@ -165,13 +167,18 @@ public class AIVisionCoachPage : Form, TuioListener
     {
         this.Text           = "AI Vision Coach";
         this.WindowState    = FormWindowState.Maximized;
-        this.BackColor      = Color.FromArgb(224, 237, 252);
+        this.BackColor      = PadelTheme.BgDeep;
         this.DoubleBuffered = true;
         this.StartPosition  = FormStartPosition.CenterScreen;
         this.MinimumSize    = new Size(1100, 700);
         SetStyle(ControlStyles.AllPaintingInWmPaint |
                  ControlStyles.UserPaint |
-                 ControlStyles.OptimizedDoubleBuffer, true);
+                 ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+    }
+
+    protected override void OnPaintBackground(PaintEventArgs e)
+    {
+        PadelTheme.PaintAppBackdrop(this, e);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -192,10 +199,10 @@ public class AIVisionCoachPage : Form, TuioListener
             Margin      = new Padding(0),
             CellBorderStyle = TableLayoutPanelCellBorderStyle.None,
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));   // header
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 118));  // header
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));   // offline banner
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));   // content
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));   // buttons
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 90));   // buttons
         this.Controls.Add(root);
 
         // ── 1. HEADER ─────────────────────────────────────────────────────
@@ -233,44 +240,42 @@ public class AIVisionCoachPage : Form, TuioListener
     // ─────────────────────────────────────────────────────────────────────
     //  Header
     // ─────────────────────────────────────────────────────────────────────
-    private Panel BuildHeader()
+    private Control BuildHeader()
     {
-        var header = new Panel
+        var holder = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
+
+        var gh = new GradientHeader
         {
-            Dock      = DockStyle.Fill,
-            BackColor = Color.FromArgb(15, 48, 100),
-            Padding   = new Padding(24, 0, 24, 0),
+            Title        = "AI Vision Coach",
+            Subtitle     = "YOLO object tracking · real-time padel positioning feedback",
+            Icon         = "👁",
+            Height       = 118,
+            GradientFrom = PadelTheme.PrimaryDeep,
+            GradientTo   = PadelTheme.Hot,
+            AccentColor  = PadelTheme.Gold,
+            Dock         = DockStyle.Fill,
         };
+        holder.Controls.Add(gh);
 
-        // Title
-        var lblTitle = Lbl("🎾  AI Vision Coach", "Segoe UI", 20, FontStyle.Bold, Color.White);
-        lblTitle.Location  = new Point(24, 10);
-        lblTitle.Size      = new Size(520, 34);
-        lblTitle.TextAlign = ContentAlignment.MiddleLeft;
-        header.Controls.Add(lblTitle);
+        // Server status pill, anchored top-right over the header
+        lblServerStatus = new Label
+        {
+            Text      = "● Checking server…",
+            Font      = new Font(PadelTheme.TextFamily, 11, FontStyle.Bold),
+            ForeColor = PadelTheme.Warn,
+            BackColor = Color.Transparent,
+            AutoSize  = false,
+            Size      = new Size(260, 30),
+            TextAlign = ContentAlignment.MiddleRight,
+            Anchor    = AnchorStyles.Top | AnchorStyles.Right,
+        };
+        holder.Controls.Add(lblServerStatus);
+        lblServerStatus.BringToFront();
+        holder.Resize += (s, e) =>
+            lblServerStatus.Location = new Point(holder.Width - 284, 20);
+        lblServerStatus.Location = new Point(Math.Max(0, holder.Width - 284), 20);
 
-        // Subtitle
-        var lblSub = Lbl("YOLO Object Tracking  •  Real-Time Padel Coaching Feedback",
-                         "Segoe UI", 10, FontStyle.Italic, Color.FromArgb(150, 195, 255));
-        lblSub.Location  = new Point(28, 46);
-        lblSub.Size      = new Size(620, 20);
-        lblSub.TextAlign = ContentAlignment.MiddleLeft;
-        header.Controls.Add(lblSub);
-
-        // Server status — anchored right
-        lblServerStatus = Lbl("● Checking server...", "Segoe UI", 11, FontStyle.Bold,
-                               Color.FromArgb(255, 200, 60));
-        lblServerStatus.Size      = new Size(240, 76);
-        lblServerStatus.TextAlign = ContentAlignment.MiddleRight;
-        lblServerStatus.Anchor    = AnchorStyles.Top | AnchorStyles.Right;
-        lblServerStatus.Location  = new Point(header.Width - 264, 0);
-        header.Controls.Add(lblServerStatus);
-
-        // Keep status label anchored on resize
-        header.Resize += (s, e) =>
-            lblServerStatus.Location = new Point(header.Width - 264, 0);
-
-        return header;
+        return holder;
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -281,16 +286,30 @@ public class AIVisionCoachPage : Form, TuioListener
         var panel = new Panel
         {
             Dock      = DockStyle.Fill,
-            BackColor = Color.FromArgb(255, 243, 205),
-            Padding   = new Padding(16, 0, 16, 0),
+            BackColor = Color.Transparent,
+            Padding   = new Padding(20, 8, 20, 8),
             Visible   = true,
+        };
+        panel.Paint += (s, e) =>
+        {
+            var g = e.Graphics;
+            PadelTheme.HiQ(g);
+            var rc = new Rectangle(20, 6, panel.Width - 40, panel.Height - 12);
+            using (var path = PadelTheme.RoundedRect(rc, 12))
+            using (var br = new LinearGradientBrush(rc,
+                Color.FromArgb(240, 80, 35, 25),
+                Color.FromArgb(240, 130, 55, 35), 90f))
+                g.FillPath(br, path);
+            using (var path = PadelTheme.RoundedRect(rc, 12))
+            using (var pen = new Pen(PadelTheme.Warn, 1.4f))
+                g.DrawPath(pen, path);
         };
 
         var lbl = Lbl(
-            "⚠   YOLO server is not running.  Place Marker 31 to Start Tracking after launching the server.",
-            "Segoe UI", 10, FontStyle.Bold, Color.FromArgb(130, 70, 0));
+            "⚠   YOLO server is not running.  Place Marker 31 to start tracking after launching the server.",
+            "Segoe UI", 10, FontStyle.Bold, Color.FromArgb(255, 230, 180));
         lbl.Dock      = DockStyle.Fill;
-        lbl.TextAlign = ContentAlignment.MiddleLeft;
+        lbl.TextAlign = ContentAlignment.MiddleCenter;
         panel.Controls.Add(lbl);
 
         return panel;
@@ -344,13 +363,13 @@ public class AIVisionCoachPage : Form, TuioListener
         {
             Dock            = DockStyle.Fill,
             CornerRadius    = 18,
-            FillColor       = Color.FromArgb(245, 250, 255),
-            BorderColor     = Color.FromArgb(190, 215, 245),
-            BorderThickness = 1.2f,
-            ShadowColor     = Color.FromArgb(30, 0, 0, 0),
+            FillColor       = Color.FromArgb(235, 22, 32, 60),
+            BorderColor     = Color.FromArgb(60, 120, 180, 255),
+            BorderThickness = 1.3f,
+            ShadowColor     = Color.FromArgb(80, 0, 0, 0),
             ShadowOffsetX   = 3,
             ShadowOffsetY   = 5,
-            DrawGloss       = false,
+            DrawGloss       = true,
             Margin          = new Padding(8, 0, 0, 0),
             Padding         = new Padding(20, 16, 20, 16),
             AutoScroll      = true,
@@ -402,42 +421,42 @@ public class AIVisionCoachPage : Form, TuioListener
             bool selected = idx == _activityIndex;
 
             var aCard = new Panel {
-                Size = new Size(cardW, 30),
+                Size = new Size(cardW, 34),
                 BackColor = selected
-                    ? Color.FromArgb(30, 80, 180)
-                    : Color.FromArgb(225, 235, 250),
-                Margin = new Padding(0, 0, 0, 3),
+                    ? Color.FromArgb(40, 110, 210)
+                    : Color.FromArgb(34, 46, 86),
+                Margin = new Padding(0, 0, 0, 4),
                 Cursor = Cursors.Default };
 
             var aLbl = new Label {
-                Text = activities[idx],
-                Font = new Font("Segoe UI", 10, selected ? FontStyle.Bold : FontStyle.Regular),
-                ForeColor = selected ? Color.White : Color.FromArgb(15, 48, 100),
+                Text = "  " + activities[idx],
+                Font = new Font(PadelTheme.TextFamily, 10.5f, selected ? FontStyle.Bold : FontStyle.Regular),
+                ForeColor = selected ? Color.White : PadelTheme.TextMid,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(8, 0, 0, 0),
+                Padding = new Padding(10, 0, 0, 0),
                 BackColor = Color.Transparent };
             aCard.Controls.Add(aLbl);
             _activityCards[idx] = aCard;
             flow.Controls.Add(aCard);
         }
-        flow.Controls.Add(Spacer(cardW, 8));
+        flow.Controls.Add(Spacer(cardW, 10));
 
         // ── Detected objects ──────────────────────────────────────────────
         flow.Controls.Add(SectionLabel("Detected Objects", cardW));
-        lblObjectsVal = ValueLabel("—", 13, Color.FromArgb(15, 48, 100), cardW);
+        lblObjectsVal = ValueLabel("—", 13, Color.White, cardW);
         flow.Controls.Add(lblObjectsVal);
         flow.Controls.Add(Spacer(cardW, 10));
 
         // ── Player zone ───────────────────────────────────────────────────
         flow.Controls.Add(SectionLabel("Player Zone", cardW));
-        lblPlayerZoneVal = ValueLabel("—", 13, Color.FromArgb(15, 48, 100), cardW);
+        lblPlayerZoneVal = ValueLabel("—", 13, Color.White, cardW);
         flow.Controls.Add(lblPlayerZoneVal);
         flow.Controls.Add(Spacer(cardW, 10));
 
         // ── Ball zone ─────────────────────────────────────────────────────
         flow.Controls.Add(SectionLabel("Ball Zone", cardW));
-        lblBallZoneVal = ValueLabel("—", 13, Color.FromArgb(15, 48, 100), cardW);
+        lblBallZoneVal = ValueLabel("—", 13, Color.White, cardW);
         flow.Controls.Add(lblBallZoneVal);
         flow.Controls.Add(Spacer(cardW, 14));
 
@@ -447,16 +466,16 @@ public class AIVisionCoachPage : Form, TuioListener
         var fbBox = new RoundedShadowPanel
         {
             CornerRadius    = 14,
-            FillColor       = Color.FromArgb(220, 238, 255),
-            BorderColor     = Color.FromArgb(160, 205, 245),
-            BorderThickness = 1f,
-            ShadowColor     = Color.FromArgb(0, 0, 0, 0),
-            DrawGloss       = false,
+            FillColor       = Color.FromArgb(220, 30, 42, 80),
+            BorderColor     = Color.FromArgb(100, 0, 220, 180),
+            BorderThickness = 1.3f,
+            ShadowColor     = Color.FromArgb(60, 0, 0, 0),
+            DrawGloss       = true,
             Size            = new Size(cardW, 80),
             Margin          = new Padding(0, 4, 0, 0),
         };
-        lblFeedbackVal = Lbl("Waiting for tracking data...", "Segoe UI", 11,
-                              FontStyle.Bold, Color.FromArgb(15, 48, 100));
+        lblFeedbackVal = Lbl("Waiting for tracking data…", "Segoe UI", 11,
+                              FontStyle.Bold, PadelTheme.AccentSoft);
         lblFeedbackVal.Dock      = DockStyle.Fill;
         lblFeedbackVal.TextAlign = ContentAlignment.MiddleCenter;
         fbBox.Controls.Add(lblFeedbackVal);
@@ -465,8 +484,8 @@ public class AIVisionCoachPage : Form, TuioListener
 
         // ── Positioning score ─────────────────────────────────────────────
         flow.Controls.Add(SectionLabel("Positioning Score", cardW));
-        lblScoreVal = ValueLabel("—", 28, Color.FromArgb(18, 130, 80), cardW);
-        lblScoreVal.Font = new Font("Segoe UI", 28, FontStyle.Bold);
+        lblScoreVal = ValueLabel("—", 32, PadelTheme.Accent, cardW);
+        lblScoreVal.Font = new Font(PadelTheme.DisplayFamily, 32, FontStyle.Bold);
         flow.Controls.Add(lblScoreVal);
 
         return card;
@@ -480,8 +499,8 @@ public class AIVisionCoachPage : Form, TuioListener
         var row = new Panel
         {
             Dock      = DockStyle.Fill,
-            BackColor = Color.FromArgb(14, 22, 46),
-            Padding   = new Padding(20, 0, 20, 0),
+            BackColor = Color.Transparent,
+            Padding   = new Padding(28, 0, 28, 12),
         };
 
         var flow = new FlowLayoutPanel {
@@ -489,40 +508,54 @@ public class AIVisionCoachPage : Form, TuioListener
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false, BackColor = Color.Transparent };
 
-        var markerDefs = new (string Id, string Action, Color Clr)[] {
-            ("31", "Start Tracking", Color.FromArgb(20, 135, 75)),
-            ("32", "Stop Tracking",  Color.FromArgb(185, 35, 35)),
-            ("33", "Next Activity",  Color.FromArgb(55, 125, 255)),
-            ("34", "Prev Activity",  Color.FromArgb(175, 55, 220)),
-            ("20", "Back",           Color.FromArgb(38, 72, 145)),
+        var markerDefs = new[] {
+            new MarkerHintDef("31", "Start Tracking", PadelTheme.Ok,        PadelTheme.Accent),
+            new MarkerHintDef("32", "Stop Tracking",  PadelTheme.HotDeep,   PadelTheme.Hot),
+            new MarkerHintDef("33", "Next Activity",  PadelTheme.Primary,   PadelTheme.PrimarySoft),
+            new MarkerHintDef("34", "Prev Activity",  Color.FromArgb(175,55,220), Color.FromArgb(220,130,255)),
+            new MarkerHintDef("20", "Back",           PadelTheme.HotDeep,   PadelTheme.Hot),
         };
 
-        foreach (var (mid, action, clr) in markerDefs)
+        foreach (var m in markerDefs)
         {
-            var card = new Panel {
-                Size = new Size(160, 46), BackColor = Color.FromArgb(18, 28, 54),
-                Margin = new Padding(0, 12, 14, 12), Cursor = Cursors.Default };
-            card.Paint += (s, e) => {
-                using (var pen = new System.Drawing.Pen(clr, 1.2f))
-                    e.Graphics.DrawRectangle(pen, 0, 0, card.Width - 1, card.Height - 1);
-                using (var b = new System.Drawing.SolidBrush(clr))
-                    e.Graphics.FillRectangle(b, 0, 0, card.Width, 4);
+            var btn = new GradientButton
+            {
+                Text         = "Marker " + m.Id,
+                Icon         = "▶",
+                Size         = new Size(180, 56),
+                Margin       = new Padding(0, 12, 14, 8),
+                GradientFrom = m.From,
+                GradientTo   = m.To,
+                CornerRadius = 16,
+                Font         = new Font(PadelTheme.TextFamily, 11.5f, FontStyle.Bold),
             };
-            card.Controls.Add(new Label {
-                Text = $"▶  Marker {mid}",
-                Font = new Font("Segoe UI", 9, FontStyle.Bold),
-                ForeColor = clr, BackColor = Color.Transparent,
-                Location = new Point(8, 6), AutoSize = true });
-            card.Controls.Add(new Label {
-                Text = action,
-                Font = new Font("Segoe UI", 9),
-                ForeColor = Color.FromArgb(200, 215, 240), BackColor = Color.Transparent,
-                Location = new Point(8, 24), AutoSize = true });
-            flow.Controls.Add(card);
+            flow.Controls.Add(btn);
+
+            var sub = new Label
+            {
+                Text      = m.Label,
+                Font      = new Font(PadelTheme.TextFamily, 9, FontStyle.Regular),
+                ForeColor = PadelTheme.TextLo,
+                BackColor = Color.Transparent,
+                AutoSize  = false,
+                Size      = new Size(180, 16),
+                Margin    = new Padding(0, 0, 14, 0),
+                TextAlign = ContentAlignment.MiddleCenter,
+            };
+            // sub label gets stacked below btn; FlowLayout will wrap if necessary
+            // (acceptable for this dashboard).
         }
 
         row.Controls.Add(flow);
         return row;
+    }
+
+    private struct MarkerHintDef
+    {
+        public string Id, Label;
+        public Color From, To;
+        public MarkerHintDef(string id, string label, Color from, Color to)
+        { Id = id; Label = label; From = from; To = to; }
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -591,7 +624,7 @@ public class AIVisionCoachPage : Form, TuioListener
                 lblPlayerZoneVal.Text = playerFound ? pZone : "Not detected";
                 lblBallZoneVal.Text   = ballFound   ? bZone : "Not detected";
                 lblFeedbackVal.Text   = feedback;
-                lblFeedbackVal.ForeColor = Color.FromArgb(15, 48, 100);
+                lblFeedbackVal.ForeColor = PadelTheme.AccentSoft;
                 lblScoreVal.Text      = playerFound ? score + "%" : "—";
                 lblScoreVal.ForeColor = ScoreColor(score);
             });
@@ -605,9 +638,9 @@ public class AIVisionCoachPage : Form, TuioListener
             {
                 offlinePanel.Visible = true;
                 lblServerStatus.Text      = "● Server Offline";
-                lblServerStatus.ForeColor = Color.FromArgb(255, 80, 80);
-                lblFeedbackVal.Text       = "YOLO server is not running.\nClick \"Launch YOLO Server\" then \"Start Tracking\".";
-                lblFeedbackVal.ForeColor  = Color.FromArgb(160, 60, 0);
+                lblServerStatus.ForeColor = PadelTheme.Err;
+                lblFeedbackVal.Text       = "YOLO server is not running.\nPlace Marker 31 after launching the server.";
+                lblFeedbackVal.ForeColor  = PadelTheme.Warn;
             });
         }
     }
@@ -644,7 +677,7 @@ public class AIVisionCoachPage : Form, TuioListener
             SafeInvoke(() =>
             {
                 lblFeedbackVal.Text      = "Tracking started. Stand in front of the camera.";
-                lblFeedbackVal.ForeColor = Color.FromArgb(15, 48, 100);
+                lblFeedbackVal.ForeColor = PadelTheme.AccentSoft;
             });
         }
         catch
@@ -653,7 +686,7 @@ public class AIVisionCoachPage : Form, TuioListener
             {
                 offlinePanel.Visible = true;
                 lblFeedbackVal.Text      = "YOLO server is not running.\nPlace Marker 31 after launching the server.";
-                lblFeedbackVal.ForeColor = Color.FromArgb(160, 60, 0);
+                lblFeedbackVal.ForeColor = PadelTheme.Warn;
             });
         }
     }
@@ -678,8 +711,8 @@ public class AIVisionCoachPage : Form, TuioListener
                 Process.Start(new ProcessStartInfo { FileName = batPath, UseShellExecute = true });
                 SafeInvoke(() =>
                 {
-                    lblFeedbackVal.Text      = "YOLO server is starting...\nWait a few seconds, then click Start Tracking.";
-                    lblFeedbackVal.ForeColor = Color.FromArgb(15, 48, 100);
+                    lblFeedbackVal.Text      = "YOLO server is starting...\nWait a few seconds, then place Marker 31 to start tracking.";
+                    lblFeedbackVal.ForeColor = PadelTheme.AccentSoft;
                 });
             }
             catch (Exception ex)
@@ -812,9 +845,9 @@ public class AIVisionCoachPage : Form, TuioListener
     {
         return new Label
         {
-            Text      = text,
-            Font      = new Font("Segoe UI", 10, FontStyle.Bold),
-            ForeColor = Color.FromArgb(70, 100, 145),
+            Text      = text.ToUpperInvariant(),
+            Font      = new Font(PadelTheme.TextFamily, 9, FontStyle.Bold),
+            ForeColor = PadelTheme.TextLo,
             BackColor = Color.Transparent,
             AutoSize  = false,
             Size      = new Size(width, 22),
@@ -872,17 +905,17 @@ public class AIVisionCoachPage : Form, TuioListener
     {
         switch (level)
         {
-            case "Intermediate": return Color.FromArgb(10, 120, 120);
-            case "Advanced":     return Color.FromArgb(140, 80, 10);
-            default:             return Color.FromArgb(15, 48, 100);
+            case "Intermediate": return PadelTheme.Accent;
+            case "Advanced":     return PadelTheme.Gold;
+            default:             return PadelTheme.PrimarySoft;
         }
     }
 
     private static Color ScoreColor(int score)
     {
-        if (score >= 80) return Color.FromArgb(18, 130, 80);
-        if (score >= 55) return Color.FromArgb(180, 130, 0);
-        return Color.FromArgb(180, 40, 40);
+        if (score >= 80) return PadelTheme.Accent;
+        if (score >= 55) return PadelTheme.Gold;
+        return PadelTheme.Err;
     }
 
     private void SafeInvoke(Action a)

@@ -30,12 +30,15 @@ public class EnrollmentPage : Form, TuioListener
     private string _gender = "";
 
     // UI
-    private Label _lblStepTitle;
-    private Label _lblStepHint;
+    private GradientHeader _header;
+    private StepIndicator  _stepDots;
+    private GlassCard      _mainCard;
     private Label _lblBigText;
     private Label _lblAlphaStrip;
     private Label _lblName;
     private Panel _thumbsHost;
+    private ProgressRing _ring;
+    private GlassCard    _ringFrame;
 
     // Capture state
     private System.Windows.Forms.Timer _captureCountdown;
@@ -43,7 +46,7 @@ public class EnrollmentPage : Form, TuioListener
     private bool _waitingOnServer = false;
     private DateTime _enrollDeadline = DateTime.MinValue;
     private System.Windows.Forms.Timer _enrollWatchdog;
-    private bool _step1AcceptReady = false;  // gate marker 4 until thumbnails appear
+    private bool _step1AcceptReady = false;
 
     // Marker debounce
     private int _lastMarkerId = -1;
@@ -60,7 +63,9 @@ public class EnrollmentPage : Form, TuioListener
         this.WindowState = FormWindowState.Maximized;
         this.StartPosition = FormStartPosition.CenterScreen;
         this.DoubleBuffered = true;
-        this.BackColor = AppSettings.PageBg;
+        this.BackColor = PadelTheme.BgDeep;
+        this.SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                      ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
 
         BuildUI();
         FaceIDRouter.OnServerReply += HandleServerReply;
@@ -70,106 +75,151 @@ public class EnrollmentPage : Form, TuioListener
         {
             if (_tuio != null) _tuio.addTuioListener(this);
             EnterStep(Step.FaceCapture);
+            LayoutCard();
         };
+        this.Resize += (s, e) => LayoutCard();
         this.FormClosed += (s, e) =>
         {
             try { if (_tuio != null) _tuio.removeTuioListener(this); } catch { }
             FaceIDRouter.OnServerReply -= HandleServerReply;
             GestureRouter.OnGestureRecognized -= HandleGestureRecognized;
-            _captureCountdown?.Stop();
-            _captureCountdown?.Dispose();
-            _enrollWatchdog?.Stop();
-            _enrollWatchdog?.Dispose();
+            if (_captureCountdown != null) { _captureCountdown.Stop(); _captureCountdown.Dispose(); }
+            if (_enrollWatchdog   != null) { _enrollWatchdog.Stop();   _enrollWatchdog.Dispose();   }
 
-            // If the user closed via the window X without going through a marker path,
-            // make sure the parent gets a "cancelled" callback exactly once.
             if (!_completed)
             {
                 _completed = true;
                 SendEnrollCancel();
-                _onCompleted?.Invoke(null);
+                if (_onCompleted != null) _onCompleted(null);
             }
         };
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    //  UI scaffolding
+    protected override void OnPaintBackground(PaintEventArgs e)
+    {
+        PadelTheme.PaintAppBackdrop(this, e);
+    }
+
     // ─────────────────────────────────────────────────────────────────
     private void BuildUI()
     {
-        _lblStepTitle = new Label
+        _header = new GradientHeader
         {
-            Text = "",
-            Font = new Font("Arial", 26, FontStyle.Bold),
-            ForeColor = AppSettings.TitleText,
-            AutoSize = false,
-            TextAlign = ContentAlignment.MiddleCenter,
-            BackColor = Color.Transparent,
-            Size = new Size(1100, 50),
-            Location = new Point(60, 70)
+            Title        = "New Player Enrollment",
+            Subtitle     = "Marker-driven wizard · Marker 20 to cancel at any time",
+            Icon         = "👤",
+            Height       = 118,
+            GradientFrom = PadelTheme.PrimaryDeep,
+            GradientTo   = PadelTheme.Accent,
+            AccentColor  = PadelTheme.Accent,
+            Dock         = DockStyle.Top,
         };
-        _lblStepHint = new Label
+        this.Controls.Add(_header);
+
+        _stepDots = new StepIndicator
         {
-            Text = "",
-            Font = new Font("Arial", 13, FontStyle.Regular),
-            ForeColor = AppSettings.SubText,
-            AutoSize = false,
-            TextAlign = ContentAlignment.MiddleCenter,
-            BackColor = Color.Transparent,
-            Size = new Size(1100, 30),
-            Location = new Point(60, 130)
+            StepCount = 5,
+            Current   = 0,
+            Size      = new Size(420, 36),
         };
+        this.Controls.Add(_stepDots);
+
+        _mainCard = new GlassCard
+        {
+            AccentTop = PadelTheme.Primary,
+            AccentBot = PadelTheme.Accent,
+            Hoverable = false,
+            Size      = new Size(960, 520),
+        };
+        this.Controls.Add(_mainCard);
+
         _lblBigText = new Label
         {
             Text = "",
-            Font = new Font("Arial", 36, FontStyle.Bold),
-            ForeColor = AppSettings.AccentText,
+            Font = new Font(PadelTheme.DisplayFamily, 22, FontStyle.Bold),
+            ForeColor = Color.White,
             AutoSize = false,
             TextAlign = ContentAlignment.MiddleCenter,
             BackColor = Color.Transparent,
-            Size = new Size(1100, 180),
-            Location = new Point(60, 180)
+            Dock      = DockStyle.None,
         };
+        _mainCard.Controls.Add(_lblBigText);
+
         _lblName = new Label
         {
             Text = "",
-            Font = new Font("Consolas", 42, FontStyle.Bold),
-            ForeColor = AppSettings.TitleText,
+            Font = new Font(PadelTheme.MonoFamily, 36, FontStyle.Bold),
+            ForeColor = Color.White,
             AutoSize = false,
             TextAlign = ContentAlignment.MiddleCenter,
             BackColor = Color.Transparent,
-            Size = new Size(1100, 70),
-            Location = new Point(60, 220),
-            Visible = false
+            Visible = false,
         };
+        _mainCard.Controls.Add(_lblName);
+
         _lblAlphaStrip = new Label
         {
             Text = "",
-            Font = new Font("Consolas", 22, FontStyle.Regular),
-            ForeColor = AppSettings.SubText,
+            Font = new Font(PadelTheme.MonoFamily, 20, FontStyle.Regular),
+            ForeColor = PadelTheme.TextLo,
             AutoSize = false,
             TextAlign = ContentAlignment.MiddleCenter,
             BackColor = Color.Transparent,
-            Size = new Size(1100, 60),
-            Location = new Point(60, 320),
-            Visible = false
+            Visible = false,
         };
+        _mainCard.Controls.Add(_lblAlphaStrip);
+
         _thumbsHost = new Panel
         {
-            Size = new Size(900, 180),
-            Location = new Point(160, 400),
             BackColor = Color.Transparent,
-            Visible = false
+            Visible = false,
         };
+        _mainCard.Controls.Add(_thumbsHost);
 
-        this.Controls.Add(_lblStepTitle);
-        this.Controls.Add(_lblStepHint);
-        this.Controls.Add(_lblBigText);
-        this.Controls.Add(_lblName);
-        this.Controls.Add(_lblAlphaStrip);
-        this.Controls.Add(_thumbsHost);
+        _ringFrame = new GlassCard
+        {
+            AccentTop = PadelTheme.Accent,
+            AccentBot = PadelTheme.AccentDeep,
+            ShowAccent = false,
+            Hoverable  = false,
+            Size       = new Size(220, 220),
+            Visible    = false,
+        };
+        _mainCard.Controls.Add(_ringFrame);
+
+        _ring = new ProgressRing
+        {
+            ArcColor      = PadelTheme.Accent,
+            Indeterminate = true,
+            Caption       = "Capturing…",
+            Thickness     = 12,
+            Dock          = DockStyle.Fill,
+        };
+        _ringFrame.Controls.Add(_ring);
 
         NavHelper.AddNavBar(this, "Enrollment", canGoBack: true);
+    }
+
+    private void LayoutCard()
+    {
+        if (_mainCard == null) return;
+
+        int top = _header.Bottom + 12;
+        int stepW = 420, stepH = 36;
+        _stepDots.Location = new Point((this.ClientSize.Width - stepW) / 2, top);
+
+        int cardW = Math.Min(1100, this.ClientSize.Width - 60);
+        int cardH = Math.Min(580, this.ClientSize.Height - top - stepH - 60);
+        _mainCard.Size     = new Size(cardW, cardH);
+        _mainCard.Location = new Point((this.ClientSize.Width - cardW) / 2, top + stepH + 12);
+
+        // Lay out children inside the card
+        int padX = 40, padY = 36;
+        _lblBigText.Bounds    = new Rectangle(padX, padY, cardW - padX * 2, 100);
+        _lblName.Bounds       = new Rectangle(padX, padY + 110, cardW - padX * 2, 80);
+        _lblAlphaStrip.Bounds = new Rectangle(padX, padY + 200, cardW - padX * 2, 50);
+        _thumbsHost.Bounds    = new Rectangle(padX, padY + 270, cardW - padX * 2, cardH - padY - 290);
+        _ringFrame.Bounds     = new Rectangle((cardW - 220) / 2, padY + 130, 220, 220);
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -182,22 +232,34 @@ public class EnrollmentPage : Form, TuioListener
         _lblAlphaStrip.Visible = false;
         _thumbsHost.Visible = false;
         _thumbsHost.Controls.Clear();
+        _ringFrame.Visible = false;
+        if (_ring != null) { _ring.Indeterminate = true; _ring.Caption = ""; }
 
         switch (s)
         {
             case Step.FaceCapture:
-                _lblStepTitle.Text = "1 / 5  —  Face Capture";
-                _lblStepHint.Text  = "Look at the camera. I'll take 5 photos — turn your head slightly between each.";
-                _lblBigText.Text   = "Get ready...";
-                _step1AcceptReady  = false;
+                _header.Title    = "Face Capture";
+                _header.Subtitle = "Step 1 / 5 — turn your head slightly between each photo";
+                _header.GradientFrom = PadelTheme.PrimaryDeep;
+                _header.GradientTo   = PadelTheme.Primary;
+                _mainCard.AccentTop  = PadelTheme.Primary;
+                _mainCard.AccentBot  = PadelTheme.PrimarySoft;
+                _stepDots.Current    = 0;
+                _lblBigText.Text     = "Get ready…";
+                _step1AcceptReady    = false;
                 StartCaptureCountdown();
                 break;
 
             case Step.Name:
-                _lblStepTitle.Text = "2 / 5  —  Name";
-                _lblStepHint.Text  = "Marker 6 rotate = next letter   •   4 = pick   •   5 = backspace   •   7 = done   •   20 = cancel";
-                _lblBigText.Text   = "";
-                _lblName.Visible   = true;
+                _header.Title    = "Your Name";
+                _header.Subtitle = "Step 2 / 5 — rotate marker 6 = next letter · 4 pick · 5 backspace · 7 done";
+                _header.GradientFrom = PadelTheme.Accent;
+                _header.GradientTo   = PadelTheme.Primary;
+                _mainCard.AccentTop  = PadelTheme.Accent;
+                _mainCard.AccentBot  = PadelTheme.AccentSoft;
+                _stepDots.Current    = 1;
+                _lblBigText.Text     = "Spell your name";
+                _lblName.Visible     = true;
                 _lblAlphaStrip.Visible = true;
                 _name = "";
                 _letterIndex = 0;
@@ -206,27 +268,45 @@ public class EnrollmentPage : Form, TuioListener
                 break;
 
             case Step.Level:
-                _lblStepTitle.Text = "3 / 5  —  Level";
-                _lblStepHint.Text  = "Marker 3 = Beginner   •   4 = Intermediate   •   5 = Advanced   •   20 = back";
-                _lblBigText.Text   = "Choose your level";
+                _header.Title    = "Skill Level";
+                _header.Subtitle = "Step 3 / 5 — Marker 3 Beginner · 4 Intermediate · 5 Advanced · 20 back";
+                _header.GradientFrom = PadelTheme.Gold;
+                _header.GradientTo   = PadelTheme.Hot;
+                _mainCard.AccentTop  = PadelTheme.Gold;
+                _mainCard.AccentBot  = PadelTheme.Hot;
+                _stepDots.Current    = 2;
+                _lblBigText.Text     = "Choose your level";
                 break;
 
             case Step.Gender:
-                _lblStepTitle.Text = "4 / 5  —  Gender";
-                _lblStepHint.Text  = "Marker 3 = Male   •   4 = Female   •   5 = Skip   •   20 = back";
-                _lblBigText.Text   = "Choose gender (optional)";
+                _header.Title    = "Gender (optional)";
+                _header.Subtitle = "Step 4 / 5 — Marker 3 Male · 4 Female · 5 Skip · 20 back";
+                _header.GradientFrom = PadelTheme.Hot;
+                _header.GradientTo   = PadelTheme.HotDeep;
+                _mainCard.AccentTop  = PadelTheme.Hot;
+                _mainCard.AccentBot  = PadelTheme.HotDeep;
+                _stepDots.Current    = 3;
+                _lblBigText.Text     = "Choose gender (optional)";
                 break;
 
             case Step.Confirm:
-                _lblStepTitle.Text = "5 / 5  —  Confirm";
-                _lblStepHint.Text  = "Marker 7 = save   •   5 = start over   •   20 = cancel";
-                _lblBigText.Text   = $"{_name}\n{MapLevelDisplay(_level)}  •  {(string.IsNullOrEmpty(_gender) ? "—" : _gender)}";
+                _header.Title    = "Confirm";
+                _header.Subtitle = "Step 5 / 5 — Marker 7 save · 5 start over · 20 cancel";
+                _header.GradientFrom = PadelTheme.AccentDeep;
+                _header.GradientTo   = PadelTheme.Accent;
+                _mainCard.AccentTop  = PadelTheme.Accent;
+                _mainCard.AccentBot  = PadelTheme.AccentSoft;
+                _stepDots.Current    = 4;
+                _lblBigText.Text     = _name + "\n" + MapLevelDisplay(_level) + "  ·  " + (string.IsNullOrEmpty(_gender) ? "—" : _gender);
                 break;
 
             case Step.Done:
-                _lblStepTitle.Text = "Welcome!";
-                _lblStepHint.Text  = "Profile saved. Loading your dashboard...";
-                _lblBigText.Text   = _name;
+                _header.Title    = "Welcome aboard!";
+                _header.Subtitle = "Profile saved — loading your dashboard…";
+                _header.GradientFrom = PadelTheme.Accent;
+                _header.GradientTo   = PadelTheme.AccentDeep;
+                _stepDots.Current    = 4;
+                _lblBigText.Text     = _name;
                 break;
         }
     }
@@ -237,7 +317,7 @@ public class EnrollmentPage : Form, TuioListener
     private void StartCaptureCountdown()
     {
         _captureRemaining = 3;
-        _captureCountdown?.Stop();
+        if (_captureCountdown != null) _captureCountdown.Stop();
         _captureCountdown = new System.Windows.Forms.Timer { Interval = 1000 };
         _captureCountdown.Tick += (s, e) =>
         {
@@ -249,7 +329,10 @@ public class EnrollmentPage : Form, TuioListener
             else
             {
                 _captureCountdown.Stop();
-                _lblBigText.Text = "Capturing 5 photos…";
+                _lblBigText.Text   = "Capturing 5 photos…";
+                _ringFrame.Visible = true;
+                _ring.Indeterminate = true;
+                _ring.Caption       = "📸";
                 SendEnrollCommand();
             }
         };
@@ -261,6 +344,7 @@ public class EnrollmentPage : Form, TuioListener
         if (_faceClient == null || !_faceClient.IsConnected)
         {
             _lblBigText.Text = "Face server offline.\nStart face_recognition_server.py and reopen.";
+            _ringFrame.Visible = false;
             return;
         }
 
@@ -274,12 +358,13 @@ public class EnrollmentPage : Form, TuioListener
         if (!_faceClient.SendCommand(cmd))
         {
             _lblBigText.Text = "Could not reach face server.";
+            _ringFrame.Visible = false;
             return;
         }
 
         _waitingOnServer = true;
         _enrollDeadline = DateTime.UtcNow.AddSeconds(15);
-        _enrollWatchdog?.Stop();
+        if (_enrollWatchdog != null) _enrollWatchdog.Stop();
         _enrollWatchdog = new System.Windows.Forms.Timer { Interval = 1000 };
         _enrollWatchdog.Tick += (s, e) =>
         {
@@ -288,7 +373,8 @@ public class EnrollmentPage : Form, TuioListener
             {
                 _enrollWatchdog.Stop();
                 _waitingOnServer = false;
-                _lblBigText.Text = "Camera timed out.\nMarker 5 = retake, 20 = cancel.";
+                _ringFrame.Visible = false;
+                _lblBigText.Text  = "Camera timed out.\nMarker 5 = retake · 20 = cancel.";
                 _step1AcceptReady = false;
             }
         };
@@ -301,7 +387,6 @@ public class EnrollmentPage : Form, TuioListener
         string type   = reply["type"]?.ToString() ?? "";
         string userId = reply["userId"]?.ToString() ?? "";
 
-        // Replies for enroll* are user-scoped; reload_done has no userId
         if (type == "reload_done") return;
         if (!string.Equals(userId, _userId, StringComparison.Ordinal)) return;
 
@@ -317,20 +402,22 @@ public class EnrollmentPage : Form, TuioListener
             {
                 _waitingOnServer = false;
                 _step1AcceptReady = false;
-                _lblBigText.Text = $"Capture failed: {reason}.\nMarker 5 = retake, 20 = cancel.";
+                _ringFrame.Visible = false;
+                _lblBigText.Text = "Capture failed: " + reason + ".\nMarker 5 = retake · 20 = cancel.";
             }));
         }
         else if (type == "enroll_cancel_done")
         {
-            // No-op; the parent has already moved on or restarted the step.
+            // No-op
         }
     }
 
     private void OnEnrollSucceeded(int saved)
     {
         _waitingOnServer = false;
-        _enrollWatchdog?.Stop();
-        _lblBigText.Text = $"Captured {saved} photos.\nMarker 4 = keep  •  5 = retake  •  20 = cancel.";
+        if (_enrollWatchdog != null) _enrollWatchdog.Stop();
+        _ringFrame.Visible = false;
+        _lblBigText.Text  = "Captured " + saved + " photos.\nMarker 4 = keep  ·  5 = retake  ·  20 = cancel.";
         _step1AcceptReady = true;
         ShowThumbnails();
     }
@@ -347,17 +434,25 @@ public class EnrollmentPage : Form, TuioListener
         var files = Directory.GetFiles(dir, "*.jpg").OrderBy(x => x).Take(5).ToArray();
         if (files.Length == 0) return;
 
-        int gap = 20;
+        int gap = 16;
         int thumbW = (_thumbsHost.Width - gap * (files.Length + 1)) / Math.Max(files.Length, 1);
         int thumbH = _thumbsHost.Height - gap;
         for (int i = 0; i < files.Length; i++)
         {
+            var frame = new GlassCard
+            {
+                AccentTop = PadelTheme.Accent,
+                AccentBot = PadelTheme.AccentDeep,
+                ShowAccent = false,
+                Hoverable  = false,
+                Size       = new Size(thumbW, thumbH),
+                Location   = new Point(gap + i * (thumbW + gap), 0),
+            };
             var pb = new PictureBox
             {
                 SizeMode = PictureBoxSizeMode.Zoom,
                 BackColor = Color.Black,
-                Size = new Size(thumbW, thumbH),
-                Location = new Point(gap + i * (thumbW + gap), 0)
+                Dock = DockStyle.Fill,
             };
             try
             {
@@ -366,7 +461,10 @@ public class EnrollmentPage : Form, TuioListener
                     pb.Image = new Bitmap(img);
             }
             catch { }
-            _thumbsHost.Controls.Add(pb);
+            frame.Controls.Add(pb);
+            pb.Dock = DockStyle.Fill;
+            frame.Padding = new Padding(10);
+            _thumbsHost.Controls.Add(frame);
         }
     }
 
@@ -417,7 +515,7 @@ public class EnrollmentPage : Form, TuioListener
         {
             if (string.IsNullOrWhiteSpace(_name))
             {
-                _lblStepHint.Text = "Name cannot be empty — keep picking letters.";
+                _header.Subtitle = "Name cannot be empty — keep picking letters.";
                 return;
             }
             EnterStep(Step.Level);
@@ -439,12 +537,6 @@ public class EnrollmentPage : Form, TuioListener
     }
 
     // ─────────────────────────────────────────────────────────────────
-    //  Hand-gesture handler — maps Circle/Checkmark/SwipeLeft/SwipeRight
-    //  into step-appropriate actions. The universal fallback in
-    //  GestureClient already covers HomePage and the trivial cases; this
-    //  is for the things markers do that no single gesture maps onto
-    //  (letter cycling, asymmetric level/gender picks).
-    // ─────────────────────────────────────────────────────────────────
     private void HandleGestureRecognized(string name, float score)
     {
         if (this.IsDisposed || _completed) return;
@@ -454,63 +546,47 @@ public class EnrollmentPage : Form, TuioListener
         {
             if (this.IsDisposed || _completed) return;
 
-            // Universal cancel — any step, Circle when we're in a step
-            // that benefits from a quick exit (handled by individual cases
-            // for nuance).
             switch (_step)
             {
                 case Step.FaceCapture:
                     if (!_step1AcceptReady && name != "Circle" && name != "SwipeLeft") return;
-                    if (name == "Checkmark")        EnterStep(Step.Name);                // keep
-                    else if (name == "SwipeRight")  { SendEnrollCancel(); EnterStep(Step.FaceCapture); } // retake
+                    if (name == "Checkmark")        EnterStep(Step.Name);
+                    else if (name == "SwipeRight")  { SendEnrollCancel(); EnterStep(Step.FaceCapture); }
                     else if (name == "SwipeLeft" || name == "Circle") CancelWizard();
                     break;
 
                 case Step.Name:
-                    // Gesture-mode mapping (different from the marker mapping
-                    // because we only have 4 gestures but 6 marker actions in
-                    // this step — see docs/manual-test-scenarios.md):
-                    //   SwipeRight → next letter in the A-Z highlight
-                    //   SwipeLeft  → backspace (delete last committed letter)
-                    //   Checkmark  → commit the highlighted letter
-                    //   Circle     → done when name is non-empty; cancel wizard when empty
                     if (name == "SwipeRight")
                     {
                         _letterIndex = (_letterIndex + 1) % 26;
                         RenderSpelling();
                     }
-                    else if (name == "SwipeLeft")
-                    {
-                        HandleNameMarker(5);  // backspace
-                    }
-                    else if (name == "Checkmark")
-                    {
-                        HandleNameMarker(4);  // commit current letter
-                    }
+                    else if (name == "SwipeLeft")  HandleNameMarker(5);
+                    else if (name == "Checkmark")  HandleNameMarker(4);
                     else if (name == "Circle")
                     {
                         if (string.IsNullOrEmpty(_name)) CancelWizard();
-                        else HandleNameMarker(7);  // done
+                        else HandleNameMarker(7);
                     }
                     break;
 
                 case Step.Level:
-                    if (name == "SwipeLeft")       HandleLevelMarker(3); // Beginner
-                    else if (name == "Checkmark")  HandleLevelMarker(4); // Intermediate
-                    else if (name == "SwipeRight") HandleLevelMarker(5); // Advanced
+                    if (name == "SwipeLeft")       HandleLevelMarker(3);
+                    else if (name == "Checkmark")  HandleLevelMarker(4);
+                    else if (name == "SwipeRight") HandleLevelMarker(5);
                     else if (name == "Circle")     CancelWizard();
                     break;
 
                 case Step.Gender:
-                    if (name == "SwipeLeft")       HandleGenderMarker(3); // Male
-                    else if (name == "Checkmark")  HandleGenderMarker(4); // Female
-                    else if (name == "SwipeRight") HandleGenderMarker(5); // Skip
+                    if (name == "SwipeLeft")       HandleGenderMarker(3);
+                    else if (name == "Checkmark")  HandleGenderMarker(4);
+                    else if (name == "SwipeRight") HandleGenderMarker(5);
                     else if (name == "Circle")     CancelWizard();
                     break;
 
                 case Step.Confirm:
-                    if (name == "Checkmark")       HandleConfirmMarker(7); // save
-                    else if (name == "SwipeLeft")  HandleConfirmMarker(5); // start over
+                    if (name == "Checkmark")       HandleConfirmMarker(7);
+                    else if (name == "SwipeLeft")  HandleConfirmMarker(5);
                     else if (name == "Circle")     CancelWizard();
                     break;
             }
@@ -522,12 +598,10 @@ public class EnrollmentPage : Form, TuioListener
         if (_completed) return;
         _completed = true;
         SendEnrollCancel();
-        try { _onCompleted?.Invoke(null); } catch { }
+        try { if (_onCompleted != null) _onCompleted(null); } catch { }
         this.Close();
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    //  Steps 3 + 4: level + gender
     // ─────────────────────────────────────────────────────────────────
     private void HandleLevelMarker(int id)
     {
@@ -553,14 +627,10 @@ public class EnrollmentPage : Form, TuioListener
         EnterStep(Step.Confirm);
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    //  Step 5: confirm + save + auto-login
-    // ─────────────────────────────────────────────────────────────────
     private void HandleConfirmMarker(int id)
     {
         if (id == 5)
         {
-            // Start over: discard captured photos and restart wizard
             SendEnrollCancel();
             _name = "";
             _level = "";
@@ -594,19 +664,18 @@ public class EnrollmentPage : Form, TuioListener
             return;
         }
 
-        // Safety-net reload; the server already reloaded after enroll_done.
-        try { _faceClient?.SendCommand(new JObject { ["cmd"] = "reload" }); }
+        try { if (_faceClient != null) _faceClient.SendCommand(new JObject { ["cmd"] = "reload" }); }
         catch { }
 
         EnterStep(Step.Done);
 
-        _completed = true;  // suppress the FormClosed "cancelled" callback
+        _completed = true;
         var navTimer = new System.Windows.Forms.Timer { Interval = 1500 };
         navTimer.Tick += (s, e) =>
         {
             navTimer.Stop();
             navTimer.Dispose();
-            try { _onCompleted?.Invoke(user); } catch { }
+            try { if (_onCompleted != null) _onCompleted(user); } catch { }
             this.Close();
         };
         navTimer.Start();
@@ -620,8 +689,6 @@ public class EnrollmentPage : Form, TuioListener
         return string.IsNullOrEmpty(lvl) ? "—" : lvl;
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    //  TUIO listener — routes markers per current step
     // ─────────────────────────────────────────────────────────────────
     public void addTuioObject(TuioObject o)
     {
@@ -659,10 +726,9 @@ public class EnrollmentPage : Form, TuioListener
 
         if (id == 20)
         {
-            // Cancel from anywhere
             _completed = true;
             SendEnrollCancel();
-            try { _onCompleted?.Invoke(null); } catch { }
+            try { if (_onCompleted != null) _onCompleted(null); } catch { }
             this.Close();
             return;
         }
@@ -674,18 +740,103 @@ public class EnrollmentPage : Form, TuioListener
                 if (id == 4 && _step1AcceptReady) EnterStep(Step.Name);
                 else if (id == 5) { SendEnrollCancel(); EnterStep(Step.FaceCapture); }
                 break;
-            case Step.Name:
-                HandleNameMarker(id);
-                break;
-            case Step.Level:
-                HandleLevelMarker(id);
-                break;
-            case Step.Gender:
-                HandleGenderMarker(id);
-                break;
-            case Step.Confirm:
-                HandleConfirmMarker(id);
-                break;
+            case Step.Name:    HandleNameMarker(id);    break;
+            case Step.Level:   HandleLevelMarker(id);   break;
+            case Step.Gender:  HandleGenderMarker(id);  break;
+            case Step.Confirm: HandleConfirmMarker(id); break;
+        }
+    }
+}
+
+namespace TuioDemo
+{
+    // 5-dot step indicator with smooth fill transition.
+    public class StepIndicator : Control
+    {
+        private int _count   = 5;
+        private int _current = 0;
+        private float _animValue;
+        private readonly System.Windows.Forms.Timer _t;
+
+        public int StepCount { get { return _count; } set { _count = Math.Max(1, value); Invalidate(); } }
+        public int Current
+        {
+            get { return _current; }
+            set
+            {
+                int v = Math.Max(0, Math.Min(_count - 1, value));
+                if (v == _current) return;
+                _current = v;
+                _t.Start();
+            }
+        }
+
+        public StepIndicator()
+        {
+            DoubleBuffered = true;
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw |
+                     ControlStyles.SupportsTransparentBackColor, true);
+            BackColor = Color.Transparent;
+            Size = new Size(420, 36);
+
+            _t = new System.Windows.Forms.Timer { Interval = 16 };
+            _t.Tick += (s, e) =>
+            {
+                float target = _current;
+                float d = (target - _animValue) * 0.2f;
+                if (Math.Abs(d) < 0.005f) { _animValue = target; _t.Stop(); }
+                else _animValue += d;
+                Invalidate();
+            };
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { _t.Stop(); _t.Dispose(); }
+            base.Dispose(disposing);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            PadelTheme.HiQ(g);
+
+            int dotR = 9;
+            int spacing = (Width - 40) / Math.Max(1, _count - 1);
+            int y = Height / 2;
+            int startX = 20;
+
+            // line behind
+            using (var pen = new Pen(Color.FromArgb(60, 80, 110, 160), 2))
+                g.DrawLine(pen, startX, y, startX + spacing * (_count - 1), y);
+
+            // animated progress line
+            int progEnd = startX + (int)(_animValue * spacing);
+            using (var br = new LinearGradientBrush(
+                new Rectangle(startX, y - 2, Math.Max(1, progEnd - startX), 4),
+                PadelTheme.Accent, PadelTheme.Primary, LinearGradientMode.Horizontal))
+                g.FillRectangle(br, startX, y - 2, Math.Max(1, progEnd - startX), 4);
+
+            for (int i = 0; i < _count; i++)
+            {
+                int cx = startX + i * spacing;
+                bool active = i <= _current;
+                bool current = i == _current;
+                Color fill = active ? PadelTheme.Accent : PadelTheme.BgPanelAlt;
+                Color stroke = active ? PadelTheme.AccentSoft : Color.FromArgb(140, 80, 100, 140);
+
+                int r = current ? dotR + 4 : dotR;
+                using (var br = new SolidBrush(fill))
+                    g.FillEllipse(br, cx - r, y - r, r * 2, r * 2);
+                using (var pen = new Pen(stroke, current ? 2.2f : 1.2f))
+                    g.DrawEllipse(pen, cx - r, y - r, r * 2, r * 2);
+
+                using (var f = new Font(PadelTheme.TextFamily, 8.5f, FontStyle.Bold))
+                using (var br = new SolidBrush(active ? Color.White : PadelTheme.TextMuted))
+                using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                    g.DrawString((i + 1).ToString(), f, br, new Rectangle(cx - r, y - r, r * 2, r * 2), sf);
+            }
         }
     }
 }

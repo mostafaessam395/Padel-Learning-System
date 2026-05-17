@@ -169,7 +169,7 @@ public class CompetitionMode : Form, TuioListener
 
         this.Text = "Competition Mode - " + level;
         this.WindowState = FormWindowState.Maximized;
-        this.BackColor = Color.FromArgb(245, 248, 255);
+        this.BackColor = TuioDemo.PadelTheme.BgDeep;
         this.DoubleBuffered = true;
         this.StartPosition = FormStartPosition.CenterScreen;
 
@@ -233,14 +233,15 @@ public class CompetitionMode : Form, TuioListener
 
     private void BuildUI()
     {
-        _lobbyPanel = CreateRoundedPanel(Color.FromArgb(255, 250, 240), 40);
+        _lobbyPanel = CreateRoundedPanel(Color.FromArgb(235, 24, 34, 64), 40);
         _lobbyPanel.Size = new Size(900, 800);
         EnableDoubleBuffering(_lobbyPanel);
 
         Label lobbyTitle = new Label();
         lobbyTitle.Text = "🏆 COMPETITION LOBBY 🏆";
-        lobbyTitle.Font = new Font("Arial", 28, FontStyle.Bold);
-        lobbyTitle.ForeColor = Color.FromArgb(180, 100, 30);
+        lobbyTitle.Font = new Font("Segoe UI", 28, FontStyle.Bold);
+        lobbyTitle.ForeColor = TuioDemo.PadelTheme.Gold;
+        lobbyTitle.BackColor = Color.Transparent;
         lobbyTitle.AutoSize = false;
         lobbyTitle.Size = new Size(800, 50);
         lobbyTitle.TextAlign = ContentAlignment.MiddleCenter;
@@ -248,8 +249,9 @@ public class CompetitionMode : Form, TuioListener
 
         _statusLabel = new Label();
         _statusLabel.Text = $"Waiting for players... (Min: {MIN_PLAYERS}, Max: {MAX_PLAYERS})";
-        _statusLabel.Font = new Font("Arial", 16, FontStyle.Regular);
-        _statusLabel.ForeColor = Color.FromArgb(100, 100, 100);
+        _statusLabel.Font = new Font("Segoe UI", 16, FontStyle.Regular);
+        _statusLabel.ForeColor = TuioDemo.PadelTheme.TextMid;
+        _statusLabel.BackColor = Color.Transparent;
         _statusLabel.AutoSize = false;
         _statusLabel.Size = new Size(800, 30);
         _statusLabel.TextAlign = ContentAlignment.MiddleCenter;
@@ -257,8 +259,9 @@ public class CompetitionMode : Form, TuioListener
 
         _countdownLabel = new Label();
         _countdownLabel.Text = "Place your marker (30-49) to join!";
-        _countdownLabel.Font = new Font("Arial", 20, FontStyle.Bold);
-        _countdownLabel.ForeColor = Color.FromArgb(80, 150, 80);
+        _countdownLabel.Font = new Font("Segoe UI", 20, FontStyle.Bold);
+        _countdownLabel.ForeColor = TuioDemo.PadelTheme.Accent;
+        _countdownLabel.BackColor = Color.Transparent;
         _countdownLabel.AutoSize = false;
         _countdownLabel.Size = new Size(800, 40);
         _countdownLabel.TextAlign = ContentAlignment.MiddleCenter;
@@ -278,8 +281,9 @@ public class CompetitionMode : Form, TuioListener
         _hostingTimerLabel = new Label
         {
             Text = $"Time left: {HOSTING_TIME_SECONDS / 60:D2}:{HOSTING_TIME_SECONDS % 60:D2}",
-            Font = new Font("Arial", 12, FontStyle.Regular),
-            ForeColor = Color.FromArgb(80, 80, 80),
+            Font = new Font("Segoe UI", 12, FontStyle.Regular),
+            ForeColor = TuioDemo.PadelTheme.TextMid,
+            BackColor = Color.Transparent,
             AutoSize = false,
             Size = new Size(200, 25),
             TextAlign = ContentAlignment.MiddleLeft,
@@ -307,9 +311,9 @@ public class CompetitionMode : Form, TuioListener
                    "4️⃣ When ready, LIFT YOUR MARKER to submit your final answer!\n" +
                    "5️⃣ Fastest correct answer wins 100 points!\n" +
                    "6️⃣ Place marker 20 at any time to go back",
-            Font = new Font("Arial", 11, FontStyle.Regular),
-            ForeColor = Color.FromArgb(60, 60, 80),
-            BackColor = Color.FromArgb(240, 245, 255),
+            Font = new Font("Segoe UI", 11, FontStyle.Regular),
+            ForeColor = TuioDemo.PadelTheme.TextMid,
+            BackColor = Color.FromArgb(235, 30, 42, 78),
             AutoSize = false,
             Size = new Size(800, 220),
             TextAlign = ContentAlignment.MiddleLeft,
@@ -319,7 +323,7 @@ public class CompetitionMode : Form, TuioListener
 
         _tuioExplanationLabel.Paint += (s, e) =>
         {
-            using (Pen pen = new Pen(Color.FromArgb(180, 180, 220), 2))
+            using (Pen pen = new Pen(Color.FromArgb(140, 0, 220, 180), 2))
             using (GraphicsPath path = GetRoundedRectangle(new Rectangle(0, 0, _tuioExplanationLabel.Width - 1, _tuioExplanationLabel.Height - 1), 15))
             {
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -335,15 +339,16 @@ public class CompetitionMode : Form, TuioListener
         _lobbyPanel.Controls.Add(_playersFlow);
         _lobbyPanel.Controls.Add(_tuioExplanationLabel);
 
-        _questionPanel = CreateRoundedPanel(Color.FromArgb(240, 248, 255), 40);
+        _questionPanel = CreateRoundedPanel(Color.FromArgb(235, 24, 34, 64), 40);
         _questionPanel.Size = new Size(1200, 800);
         _questionPanel.Visible = false;
         EnableDoubleBuffering(_questionPanel);
 
         _questionLabel = new Label();
         _questionLabel.Text = "What word matches this image?";
-        _questionLabel.Font = new Font("Arial", 20, FontStyle.Bold);
-        _questionLabel.ForeColor = Color.FromArgb(40, 60, 100);
+        _questionLabel.Font = new Font("Segoe UI", 20, FontStyle.Bold);
+        _questionLabel.ForeColor = Color.White;
+        _questionLabel.BackColor = Color.Transparent;
         _questionLabel.AutoSize = false;
         _questionLabel.Size = new Size(1100, 35);
         _questionLabel.TextAlign = ContentAlignment.MiddleCenter;
@@ -365,8 +370,9 @@ public class CompetitionMode : Form, TuioListener
 
         _timerLabel = new Label();
         _timerLabel.Text = QUESTION_TIME_SECONDS.ToString();
-        _timerLabel.Font = new Font("Arial", 14, FontStyle.Bold);
-        _timerLabel.ForeColor = Color.FromArgb(80, 120, 180);
+        _timerLabel.Font = new Font("Segoe UI", 14, FontStyle.Bold);
+        _timerLabel.ForeColor = TuioDemo.PadelTheme.AccentSoft;
+        _timerLabel.BackColor = Color.Transparent;
         _timerLabel.AutoSize = true;
         _timerLabel.Location = new Point(580, 333);
 
@@ -432,13 +438,13 @@ public class CompetitionMode : Form, TuioListener
         Label questionInstructions = new Label
         {
             Text = "🔄 ROTATE YOUR MARKER to select answer → 🖐️ LIFT MARKER to submit!\n🎨 Each player has their own unique color",
-            Font = new Font("Arial", 12, FontStyle.Bold),
-            ForeColor = Color.FromArgb(80, 80, 100),
+            Font = new Font("Segoe UI", 12, FontStyle.Bold),
+            ForeColor = TuioDemo.PadelTheme.TextMid,
+            BackColor = Color.Transparent,
             AutoSize = false,
             Size = new Size(1100, 50),
             TextAlign = ContentAlignment.MiddleCenter,
             Location = new Point(50, 720),
-            BackColor = Color.FromArgb(240, 245, 250),
             Padding = new Padding(5)
         };
         _questionPanel.Controls.Add(questionInstructions);
@@ -448,12 +454,12 @@ public class CompetitionMode : Form, TuioListener
         _questionPanel.Controls.Add(_timerBar);
         _questionPanel.Controls.Add(_timerLabel);
 
-        _leaderboardPanel = CreateRoundedPanel(Color.FromArgb(255, 248, 240), 40);
+        _leaderboardPanel = CreateRoundedPanel(Color.FromArgb(235, 24, 34, 64), 40);
         _leaderboardPanel.Size = new Size(900, 600);
         _leaderboardPanel.Visible = false;
         EnableDoubleBuffering(_leaderboardPanel);
 
-        _revealPanel = CreateRoundedPanel(Color.FromArgb(255, 250, 240), 40);
+        _revealPanel = CreateRoundedPanel(Color.FromArgb(235, 24, 34, 64), 40);
         _revealPanel.Size = new Size(900, 700);
         _revealPanel.Visible = false;
         EnableDoubleBuffering(_revealPanel);

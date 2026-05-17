@@ -51,20 +51,20 @@ public static class AppSettings
 
     public static int VoiceRate => IsSlowVoice ? -5 : -2;
 
-    public static Color HomeBgTop => IsDarkMode ? Color.FromArgb(10, 15, 30) : Color.FromArgb(28, 76, 116);
-    public static Color HomeBgBottom => IsDarkMode ? Color.FromArgb(25, 35, 60) : Color.FromArgb(106, 158, 198);
-    public static Color PageBg => IsDarkMode ? Color.FromArgb(18, 22, 35) : Color.FromArgb(245, 250, 255);
+    public static Color HomeBgTop    => IsDarkMode ? Color.FromArgb(8, 12, 28)   : Color.FromArgb(28, 70, 130);
+    public static Color HomeBgBottom => IsDarkMode ? Color.FromArgb(24, 34, 64)  : Color.FromArgb(86, 152, 210);
+    public static Color PageBg       => IsDarkMode ? Color.FromArgb(8, 12, 28)   : Color.FromArgb(244, 248, 255);
 
-    public static Color TitleText => IsDarkMode ? Color.FromArgb(235, 240, 248) : Color.FromArgb(15, 40, 75);
-    public static Color SubText => IsDarkMode ? Color.FromArgb(190, 200, 215) : Color.FromArgb(70, 90, 110);
-    public static Color AccentText => IsDarkMode ? Color.FromArgb(140, 190, 255) : Color.FromArgb(55, 90, 125);
+    public static Color TitleText   => IsDarkMode ? Color.FromArgb(245, 248, 255) : Color.FromArgb(15, 36, 72);
+    public static Color SubText     => IsDarkMode ? Color.FromArgb(200, 212, 240) : Color.FromArgb(72, 96, 128);
+    public static Color AccentText  => IsDarkMode ? Color.FromArgb(60, 235, 200)  : Color.FromArgb(0, 170, 145);
 
-    public static Color PanelFill => IsDarkMode ? Color.FromArgb(35, 42, 58) : Color.FromArgb(255, 252, 242);
-    public static Color CardFill => IsDarkMode ? Color.FromArgb(40, 48, 68) : Color.White;
-    public static Color Border => IsDarkMode ? Color.FromArgb(75, 90, 120) : Color.FromArgb(220, 228, 235);
+    public static Color PanelFill   => IsDarkMode ? Color.FromArgb(30, 42, 78)    : Color.FromArgb(255, 254, 248);
+    public static Color CardFill    => IsDarkMode ? Color.FromArgb(36, 50, 92)    : Color.White;
+    public static Color Border      => IsDarkMode ? Color.FromArgb(60, 255, 255, 255) : Color.FromArgb(40, 100, 140, 180);
 
-    public static Color NavTop => IsDarkMode ? Color.FromArgb(16, 24, 40) : Color.FromArgb(24, 46, 90);
-    public static Color NavBottom => IsDarkMode ? Color.FromArgb(8, 14, 28) : Color.FromArgb(10, 22, 48);
+    public static Color NavTop      => IsDarkMode ? Color.FromArgb(14, 22, 46)    : Color.FromArgb(20, 42, 84);
+    public static Color NavBottom   => IsDarkMode ? Color.FromArgb(6, 12, 26)     : Color.FromArgb(8, 20, 44);
 }
 
 // ======================== Custom Panels ========================
