@@ -74,5 +74,24 @@
       "Spelling_Score": 50,
       "Competition_Score": 50
     }
+  },
+  {
+    "UserId": "usr_83dd568d",
+    "BluetoothId": "",
+    "FaceId": "usr_83dd568d",
+    "Name": "Player 568D",
+    "Gender": "",
+    "Age": 0,
+    "Level": "Primary",
+    "Role": "Player",
+    "IsActive": true,
+    "GazeProfile": {
+      "Strokes_Score": 50,
+      "Rules_Score": 50,
+      "Practice_Score": 50,
+      "Quiz_Score": 50,
+      "Spelling_Score": 50,
+      "Competition_Score": 50
+    }
   }
 ]
