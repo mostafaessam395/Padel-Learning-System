@@ -1159,6 +1159,211 @@ namespace TuioDemo
         }
     }
 
+    /// <summary>
+    /// Player profile card — circular avatar with initials, name + level, and
+    /// a stack of animated horizontal score bars. Designed for the upper-right
+    /// slot of a LearningPage header. Stats animate from 0 to their target
+    /// value on Shown so the card feels alive without external input.
+    /// </summary>
+    public class PlayerStatsCard : Control
+    {
+        public string PlayerName { get; set; } = "Player";
+        public string LevelText  { get; set; } = "Beginner";
+        public Color  AccentTop  { get; set; } = PadelTheme.Accent;
+        public Color  AccentBot  { get; set; } = PadelTheme.Primary;
+
+        private struct StatRow { public string Label; public int Target; public float Anim; public Color Color; }
+        private readonly List<StatRow> _rows = new List<StatRow>();
+        private readonly System.Windows.Forms.Timer _animTimer;
+        private readonly System.Windows.Forms.Timer _pulseTimer;
+        private float _pulsePhase;
+
+        public PlayerStatsCard()
+        {
+            DoubleBuffered = true;
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw |
+                     ControlStyles.SupportsTransparentBackColor, true);
+            BackColor = Color.Transparent;
+            Size = new Size(300, 240);
+
+            _animTimer = new System.Windows.Forms.Timer { Interval = 16 };
+            _animTimer.Tick += (s, e) =>
+            {
+                bool stillMoving = false;
+                for (int i = 0; i < _rows.Count; i++)
+                {
+                    var r = _rows[i];
+                    float delta = (r.Target - r.Anim) * 0.10f;
+                    if (Math.Abs(r.Target - r.Anim) < 0.4f) r.Anim = r.Target;
+                    else { r.Anim += delta; stillMoving = true; }
+                    _rows[i] = r;
+                }
+                if (!stillMoving) _animTimer.Stop();
+                Invalidate();
+            };
+
+            _pulseTimer = new System.Windows.Forms.Timer { Interval = 33 };
+            _pulseTimer.Tick += (s, e) => { _pulsePhase += 0.06f; if (_pulsePhase > 6.28f) _pulsePhase -= 6.28f; Invalidate(); };
+            _pulseTimer.Start();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { _animTimer.Stop(); _animTimer.Dispose(); _pulseTimer.Stop(); _pulseTimer.Dispose(); }
+            base.Dispose(disposing);
+        }
+
+        public void AddStat(string label, int score, Color color)
+        {
+            _rows.Add(new StatRow { Label = label, Target = Math.Max(0, Math.Min(100, score)), Anim = 0f, Color = color });
+            _animTimer.Start();
+            Invalidate();
+        }
+
+        public void SetStats(params (string label, int score, Color color)[] stats)
+        {
+            _rows.Clear();
+            foreach (var s in stats) _rows.Add(new StatRow { Label = s.label, Target = Math.Max(0, Math.Min(100, s.score)), Anim = 0f, Color = s.color });
+            _animTimer.Start();
+            Invalidate();
+        }
+
+        private string Initials(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return "P";
+            var parts = name.Trim().Split(new[] { ' ', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0) return "P";
+            string s = parts[0].Substring(0, 1).ToUpperInvariant();
+            if (parts.Length > 1 && parts[parts.Length - 1].Length > 0)
+                s += parts[parts.Length - 1].Substring(0, 1).ToUpperInvariant();
+            return s;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            PadelTheme.HiQ(g);
+            var r = new Rectangle(4, 4, Width - 8, Height - 12);
+
+            // Drop shadow
+            PadelTheme.DrawSoftShadow(g, r, PadelTheme.RadLg, 10, 70);
+
+            // Body
+            using (var path = PadelTheme.RoundedRect(r, PadelTheme.RadLg))
+            using (var br = new LinearGradientBrush(
+                new Rectangle(r.X, r.Y, r.Width, Math.Max(1, r.Height)),
+                Color.FromArgb(245, 32, 46, 84),
+                Color.FromArgb(245, 22, 32, 60), LinearGradientMode.Vertical))
+                g.FillPath(br, path);
+
+            // Top accent strip (gradient)
+            var strip = new Rectangle(r.X + 16, r.Y, r.Width - 32, 5);
+            using (var br = new LinearGradientBrush(strip, AccentTop, AccentBot, LinearGradientMode.Horizontal))
+                g.FillRectangle(br, strip);
+
+            // Avatar circle (top-left)
+            int avR = 28;
+            int avCx = r.X + 22 + avR;
+            int avCy = r.Y + 22 + avR;
+            // Pulsing halo
+            float p = (float)((Math.Sin(_pulsePhase) + 1) * 0.5);
+            int haloR = avR + 4 + (int)(p * 5);
+            int haloA = 60 - (int)(p * 40);
+            using (var br = new SolidBrush(Color.FromArgb(Math.Max(15, haloA), AccentTop)))
+                g.FillEllipse(br, avCx - haloR, avCy - haloR, haloR * 2, haloR * 2);
+            // Avatar fill
+            using (var avPath = new GraphicsPath())
+            {
+                avPath.AddEllipse(avCx - avR, avCy - avR, avR * 2, avR * 2);
+                using (var pgb = new PathGradientBrush(avPath))
+                {
+                    pgb.CenterPoint    = new PointF(avCx - avR * 0.3f, avCy - avR * 0.3f);
+                    pgb.CenterColor    = PadelTheme.Lerp(AccentTop, Color.White, 0.35f);
+                    pgb.SurroundColors = new[] { AccentBot };
+                    g.FillPath(pgb, avPath);
+                }
+            }
+            using (var pen = new Pen(Color.FromArgb(180, 255, 255, 255), 2f))
+                g.DrawEllipse(pen, avCx - avR, avCy - avR, avR * 2, avR * 2);
+
+            // Initials
+            using (var f = new Font(PadelTheme.DisplayFamily, 18, FontStyle.Bold))
+            using (var br = new SolidBrush(Color.White))
+            using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                g.DrawString(Initials(PlayerName), f, br, new Rectangle(avCx - avR, avCy - avR, avR * 2, avR * 2), sf);
+
+            // Name + level
+            int textX = avCx + avR + 14;
+            int textW = r.Right - textX - 16;
+            using (var nf = new Font(PadelTheme.DisplayFamily, 13, FontStyle.Bold))
+            using (var br = new SolidBrush(Color.White))
+                g.DrawString(PlayerName, nf, br, textX, r.Y + 20);
+            using (var lf = new Font(PadelTheme.TextFamily, 9.5f, FontStyle.Regular))
+            using (var br = new SolidBrush(PadelTheme.TextLo))
+                g.DrawString("Level · " + LevelText, lf, br, textX, r.Y + 44);
+
+            // Section divider
+            int divY = r.Y + 86;
+            using (var br = new LinearGradientBrush(
+                new Rectangle(r.X + 18, divY, r.Width - 36, 1),
+                Color.FromArgb(0, 255, 255, 255),
+                Color.FromArgb(80, 0, 220, 180), LinearGradientMode.Horizontal))
+                g.FillRectangle(br, r.X + 18, divY, r.Width - 36, 1);
+
+            // Section heading
+            using (var hf = new Font(PadelTheme.TextFamily, 8.5f, FontStyle.Bold))
+            using (var br = new SolidBrush(PadelTheme.AccentSoft))
+                g.DrawString("PROGRESS", hf, br, r.X + 22, divY + 4);
+
+            // Stat bars
+            int barX = r.X + 22;
+            int barW = r.Width - 44;
+            int barH = 7;
+            int rowH = 22;
+            int startY = divY + 22;
+
+            for (int i = 0; i < _rows.Count; i++)
+            {
+                var row = _rows[i];
+                int y = startY + i * rowH;
+                if (y + barH + 12 > r.Bottom - 10) break;
+
+                // Label
+                using (var f = new Font(PadelTheme.TextFamily, 8.5f, FontStyle.Regular))
+                using (var br = new SolidBrush(PadelTheme.TextMid))
+                    g.DrawString(row.Label, f, br, barX, y);
+
+                // Value
+                using (var f = new Font(PadelTheme.TextFamily, 8.5f, FontStyle.Bold))
+                using (var br = new SolidBrush(Color.White))
+                using (var sf = new StringFormat { Alignment = StringAlignment.Far })
+                    g.DrawString(((int)row.Anim).ToString(), f, br,
+                        new Rectangle(barX, y, barW, 14), sf);
+
+                // Bar background
+                int by = y + 13;
+                var bg = new Rectangle(barX, by, barW, barH);
+                using (var path = PadelTheme.RoundedRect(bg, barH / 2))
+                using (var br = new SolidBrush(Color.FromArgb(220, 14, 22, 46)))
+                    g.FillPath(br, path);
+
+                // Bar fill (animated)
+                int fillW = Math.Max(1, (int)(barW * row.Anim / 100f));
+                var fill = new Rectangle(barX, by, fillW, barH);
+                using (var path = PadelTheme.RoundedRect(fill, barH / 2))
+                using (var br = new LinearGradientBrush(fill,
+                    PadelTheme.Lerp(row.Color, Color.White, 0.2f), row.Color, LinearGradientMode.Horizontal))
+                    g.FillPath(br, path);
+            }
+
+            // Outline
+            using (var path = PadelTheme.RoundedRect(r, PadelTheme.RadLg))
+            using (var pen = new Pen(Color.FromArgb(60, 0, 220, 180), 1.4f))
+                g.DrawPath(pen, path);
+        }
+    }
+
     // Themed page form that paints a smooth gradient backdrop with subtle stars.
     public class PadelPageForm : Form
     {

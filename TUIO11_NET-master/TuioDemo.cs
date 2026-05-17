@@ -2472,9 +2472,9 @@ public class LearningPage : Form, TuioListener
     private RoundedShadowPanel cardCompetition;
     private Label lblFooter;
 
-    private RoundedShadowPanel primaryImageFrame;
-    private PictureBox picPrimaryStudent;
-    private Image primaryStudentImage;
+    // Used for the upper-right slot of the header — now hosts an animated
+    // PlayerStatsCard instead of the old empty PictureBox frame.
+    private Control primaryImageFrame;
 
     // ── Gaze Tracking & Adaptive Coaching ──────────────────────
     private GazeClient _gazeClient;
@@ -2671,28 +2671,27 @@ public class LearningPage : Form, TuioListener
         lblHint.TextAlign = ContentAlignment.MiddleLeft;
         lblHint.BackColor = Color.Transparent;
 
-        primaryImageFrame = new RoundedShadowPanel
+        // Live player profile + stats panel (replaces the old empty white card).
+        var statsCard = new PlayerStatsCard
         {
-            CornerRadius = 45,
-            FillColor = Color.White,
-            BorderColor = Color.FromArgb(220, 235, 248),
-            BorderThickness = 2f,
-            ShadowColor = Color.FromArgb(40, 0, 0, 0),
-            DrawGloss = false,
-            ShadowOffsetX = 6,
-            ShadowOffsetY = 10,
-            Size = new Size(240, 240),
-            Padding = new Padding(12)
+            PlayerName = currentUser != null ? currentUser.Name : "Player",
+            LevelText  = "Beginner",
+            AccentTop  = Color.FromArgb(0, 220, 180),    // teal
+            AccentBot  = Color.FromArgb(86, 130, 255),   // electric blue
+            Size       = new Size(320, 240),
         };
-
-        picPrimaryStudent = new PictureBox();
-        picPrimaryStudent.Dock = DockStyle.Fill;
-        picPrimaryStudent.SizeMode = PictureBoxSizeMode.Zoom;
-        picPrimaryStudent.BackColor = Color.White;
-        picPrimaryStudent.Margin = new Padding(0);
-        picPrimaryStudent.Image = primaryStudentImage;
-
-        primaryImageFrame.Controls.Add(picPrimaryStudent);
+        var gp = currentUser != null && currentUser.GazeProfile != null
+                 ? currentUser.GazeProfile
+                 : new GazeProfile();
+        statsCard.SetStats(
+            ("Strokes",     gp.Strokes_Score,     Color.FromArgb(245, 162, 66)),
+            ("Court Rules", gp.Rules_Score,       Color.FromArgb(85, 165, 245)),
+            ("Practice",    gp.Practice_Score,    Color.FromArgb(0, 220, 180)),
+            ("Quiz",        gp.Quiz_Score,        Color.FromArgb(220, 90, 130)),
+            ("Speed",       gp.Spelling_Score,    Color.FromArgb(180, 130, 245)),
+            ("Competition", gp.Competition_Score, Color.FromArgb(140, 230, 110))
+        );
+        primaryImageFrame = statsCard;
 
         headerPanel.Controls.Add(lblLevelBadge);
         headerPanel.Controls.Add(lblTitle);
@@ -3706,12 +3705,6 @@ public class LearningPage : Form, TuioListener
         GazeRouter.OnGazePoint -= HandleGazePoint;
         _gazeClient?.Disconnect();
         try { _learningSynth?.Dispose(); } catch { }
-
-        if (primaryStudentImage != null)
-        {
-            primaryStudentImage.Dispose();
-            primaryStudentImage = null;
-        }
 
         base.OnFormClosed(e);
     }
